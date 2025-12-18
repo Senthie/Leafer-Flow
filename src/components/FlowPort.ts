@@ -1,7 +1,11 @@
 // FlowPort component - represents connection points on nodes
 
 import { PortData } from '../types'
-import type { FlowNode } from './FlowNode'
+
+// Forward declaration to avoid circular dependency
+export interface FlowNodeInterface {
+  getPortAbsolutePosition(portId: string): { x: number; y: number } | null
+}
 
 export class FlowPort {
   public readonly id: string
@@ -9,10 +13,10 @@ export class FlowPort {
   public readonly dataType: string | undefined
   public readonly multiple: boolean
   public readonly position: 'top' | 'right' | 'bottom' | 'left'
-  public readonly parentNode: FlowNode
+  public readonly parentNode: FlowNodeInterface
   private connections: Set<string> = new Set() // Edge IDs connected to this port
 
-  constructor(portData: PortData, parentNode: FlowNode) {
+  constructor(portData: PortData, parentNode: FlowNodeInterface) {
     this.id = portData.id
     this.type = portData.type
     this.dataType = portData.dataType

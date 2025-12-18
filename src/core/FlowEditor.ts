@@ -4,13 +4,14 @@ import { FlowOptions, FlowData, NodeData, EdgeData } from '../types'
 import { FlowNode } from '../components/FlowNode'
 import { FlowEdge } from '../components/FlowEdge'
 import { NodeManager } from '../managers/NodeManager'
-import { NodeEvent } from '../events/types'
+import { EdgeManager } from '../managers/EdgeManager'
+import { NodeEvent, EdgeEvent } from '../events/types'
 
 export class FlowEditor {
   private _container: HTMLElement
   private _options: FlowOptions
   private nodeManager: NodeManager
-  private edges: Map<string, FlowEdge> = new Map()
+  private edgeManager: EdgeManager
 
   constructor(container: HTMLElement, options: Partial<FlowOptions> = {}) {
     this._container = container
@@ -32,6 +33,12 @@ export class FlowEditor {
       onEvent: this.handleNodeEvent.bind(this),
     })
 
+    // Initialize EdgeManager with event handling
+    this.edgeManager = new EdgeManager({
+      edgeTypes: this._options.edgeTypes,
+      onEvent: this.handleEdgeEvent.bind(this),
+    })
+
     this.initialize()
   }
 
@@ -44,6 +51,20 @@ export class FlowEditor {
     // Handle node events from NodeManager
     // This can be extended to trigger custom events or update UI
     console.log('Node event:', event.type, event.data)
+
+    // Handle node deletion - remove related edges
+    if (event.type === 'node:deleted' && event.data.nodeId) {
+      this.edgeManager.deleteEdgesByNode(event.data.nodeId)
+    }
+
+    // Future: emit events to external listeners
+    // this.emit(event.type, event.data)
+  }
+
+  private handleEdgeEvent(event: EdgeEvent): void {
+    // Handle edge events from EdgeManager
+    // This can be extended to trigger custom events or update UI
+    console.log('Edge event:', event.type, event.data)
 
     // Future: emit events to external listeners
     // this.emit(event.type, event.data)
@@ -94,25 +115,83 @@ export class FlowEditor {
 
   public clearSelection(): void {
     this.nodeManager.clearSelection()
+    this.edgeManager.clearSelection()
   }
 
   // Edge operations
-  public addEdge(_edgeData: EdgeData): FlowEdge {
-    // Implementation will be added in later tasks
-    throw new Error('Not implemented yet')
+  public addEdge(edgeData: EdgeData): FlowEdge {
+    const sourceNode = this.nodeManager.getNode(edgeData.source)
+    const targetNode = this.nodeManager.getNode(edgeData.target)
+
+    if (!sourceNode) {
+      throw new Error(`Source node '${edgeData.source}' not found`)
+    }
+
+    if (!targetNode) {
+      throw new Error(`Target node '${edgeData.target}' not found`)
+    }
+
+    return this.edgeManager.createEdge(edgeData, sourceNode, targetNode)
   }
 
-  public removeEdge(_edgeId: string): boolean {
-    // Implementation will be added in later tasks
-    throw new Error('Not implemented yet')
+  public removeEdge(edgeId: string): boolean {
+    return this.edgeManager.deleteEdge(edgeId)
   }
 
   public getEdge(edgeId: string): FlowEdge | null {
-    return this.edges.get(edgeId) || null
+    return this.edgeManager.getEdge(edgeId)
   }
 
   public getAllEdges(): FlowEdge[] {
-    return Array.from(this.edges.values())
+    return this.edgeManager.getAllEdges()
+  }
+
+  // Additional edge operations exposed from EdgeManager
+  public updateEdge(edgeId: string, updates: Partial<EdgeData>): FlowEdge {
+    return this.edgeManager.updateEdge(edgeId, updates)
+  }
+
+  public selectEdge(edgeId: string): boolean {
+    return this.edgeManager.selectEdge(edgeId)
+  }
+
+  public deselectEdge(edgeId: string): boolean {
+    return this.edgeManager.deselectEdge(edgeId)
+  }
+
+  public getSelectedEdges(): FlowEdge[] {
+    return this.edgeManager.getSelectedEdges()
+  }
+
+  public canConnect(
+    sourceNodeId: string,
+    sourcePortId: string,
+    targetNodeId: string,
+    targetPortId: string
+  ): { canConnect: boolean; reason?: string } {
+    const sourceNode = this.nodeManager.getNode(sourceNodeId)
+    const targetNode = this.nodeManager.getNode(targetNodeId)
+
+    if (!sourceNode) {
+      return {
+        canConnect: false,
+        reason: `Source node '${sourceNodeId}' not found`,
+      }
+    }
+
+    if (!targetNode) {
+      return {
+        canConnect: false,
+        reason: `Target node '${targetNodeId}' not found`,
+      }
+    }
+
+    return this.edgeManager.canConnect(
+      sourceNode,
+      sourcePortId,
+      targetNode,
+      targetPortId
+    )
   }
 
   // View control

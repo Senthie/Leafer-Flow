@@ -1,11 +1,15 @@
 // Main FlowEditor class - entry point for Leafer-Flow
 
-import { FlowOptions, FlowData, NodeData, EdgeData } from '../types'
+import { FlowOptions, NodeData, EdgeData } from '../types'
 import { FlowNode } from '../components/FlowNode'
 import { FlowEdge } from '../components/FlowEdge'
 import { NodeManager } from '../managers/NodeManager'
 import { EdgeManager } from '../managers/EdgeManager'
 import { ViewportManager, ViewportState } from '../managers/ViewportManager'
+import {
+  SerializationManager,
+  SerializationOptions,
+} from '../managers/SerializationManager'
 import { InteractionSystem } from '../systems/InteractionSystem'
 import { EventSystem, EventCallback } from '../systems/EventSystem'
 import {
@@ -412,14 +416,66 @@ export class FlowEditor {
   }
 
   // Serialization
-  public toJSON(): FlowData {
-    // Implementation will be added in later tasks
-    throw new Error('Not implemented yet')
+  public toJSON(options?: SerializationOptions): string {
+    const nodes = this.getAllNodes()
+    const edges = this.getAllEdges()
+    const viewport = this.getViewport()
+
+    return SerializationManager.serialize(nodes, edges, viewport, options)
   }
 
-  public fromJSON(_data: FlowData): void {
-    // Implementation will be added in later tasks
-    throw new Error('Not implemented yet')
+  public fromJSON(jsonString: string): void {
+    const flowData = SerializationManager.deserialize(jsonString)
+
+    // Clear existing data
+    this.clearAll()
+
+    // Load nodes first
+    for (const nodeData of flowData.nodes) {
+      this.addNode(nodeData)
+    }
+
+    // Load edges after nodes are created
+    for (const edgeData of flowData.edges) {
+      this.addEdge(edgeData)
+    }
+
+    // Set viewport
+    this.setViewport(flowData.viewport)
+
+    // Emit load event
+    this.eventSystem.emit('flow:loaded', {
+      type: 'flow:loaded',
+      timestamp: Date.now(),
+      data: {
+        nodeCount: flowData.nodes.length,
+        edgeCount: flowData.edges.length,
+        viewport: flowData.viewport,
+        metadata: flowData.metadata,
+      },
+    })
+  }
+
+  // Helper method to clear all data
+  private clearAll(): void {
+    // Clear selection first
+    this.clearSelection()
+
+    // Remove all edges first to avoid orphaned references
+    const allEdges = this.getAllEdges()
+    for (const edge of allEdges) {
+      this.removeEdge(edge.id)
+    }
+
+    // Remove all nodes
+    const allNodes = this.getAllNodes()
+    for (const node of allNodes) {
+      this.removeNode(node.id)
+    }
+
+    // Reset viewport
+    this.viewportManager.resetZoom()
+    this.viewportManager.centerView()
   }
 
   // Cleanup method

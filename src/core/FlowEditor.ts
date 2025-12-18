@@ -6,7 +6,13 @@ import { FlowEdge } from '../components/FlowEdge'
 import { NodeManager } from '../managers/NodeManager'
 import { EdgeManager } from '../managers/EdgeManager'
 import { InteractionSystem } from '../systems/InteractionSystem'
-import { NodeEvent, EdgeEvent, InteractionEvent } from '../events/types'
+import { EventSystem, EventCallback } from '../systems/EventSystem'
+import {
+  NodeEvent,
+  EdgeEvent,
+  InteractionEvent,
+  FlowEvent,
+} from '../events/types'
 
 export class FlowEditor {
   private _container: HTMLElement
@@ -14,6 +20,7 @@ export class FlowEditor {
   private nodeManager: NodeManager
   private edgeManager: EdgeManager
   private interactionSystem: InteractionSystem
+  private eventSystem: EventSystem
 
   constructor(container: HTMLElement, options: Partial<FlowOptions> = {}) {
     this._container = container
@@ -28,6 +35,12 @@ export class FlowEditor {
       nodeTypes: options.nodeTypes || {},
       edgeTypes: options.edgeTypes || {},
     }
+
+    // Initialize EventSystem first
+    this.eventSystem = new EventSystem({
+      maxListeners: 1000,
+      enableLogging: false, // Can be made configurable
+    })
 
     // Initialize NodeManager with event handling
     this.nodeManager = new NodeManager({
@@ -63,7 +76,6 @@ export class FlowEditor {
 
   private handleNodeEvent(event: NodeEvent): void {
     // Handle node events from NodeManager
-    // This can be extended to trigger custom events or update UI
     console.log('Node event:', event.type, event.data)
 
     // Handle node deletion - remove related edges
@@ -71,17 +83,16 @@ export class FlowEditor {
       this.edgeManager.deleteEdgesByNode(event.data.nodeId)
     }
 
-    // Future: emit events to external listeners
-    // this.emit(event.type, event.data)
+    // Emit event through the centralized event system
+    this.eventSystem.emitNodeEvent(event)
   }
 
   private handleEdgeEvent(event: EdgeEvent): void {
     // Handle edge events from EdgeManager
-    // This can be extended to trigger custom events or update UI
     console.log('Edge event:', event.type, event.data)
 
-    // Future: emit events to external listeners
-    // this.emit(event.type, event.data)
+    // Emit event through the centralized event system
+    this.eventSystem.emitEdgeEvent(event)
   }
 
   private handleInteractionEvent(event: InteractionEvent): void {
@@ -109,8 +120,8 @@ export class FlowEditor {
       // For now, this is handled by the interaction system validation
     }
 
-    // Future: emit events to external listeners
-    // this.emit(event.type, event.data)
+    // Emit event through the centralized event system
+    this.eventSystem.emitInteractionEvent(event)
   }
 
   // Getters for private properties
@@ -254,15 +265,63 @@ export class FlowEditor {
     throw new Error('Not implemented yet')
   }
 
-  // Event system
-  public on(_event: string, _callback: Function): void {
-    // Implementation will be added in later tasks
-    throw new Error('Not implemented yet')
+  // Event system - Public API
+  public on<T extends FlowEvent = FlowEvent>(
+    event: string,
+    callback: EventCallback<T>
+  ): void {
+    this.eventSystem.on(event, callback)
   }
 
-  public off(_event: string, _callback: Function): void {
-    // Implementation will be added in later tasks
-    throw new Error('Not implemented yet')
+  public once<T extends FlowEvent = FlowEvent>(
+    event: string,
+    callback: EventCallback<T>
+  ): void {
+    this.eventSystem.once(event, callback)
+  }
+
+  public off<T extends FlowEvent = FlowEvent>(
+    event: string,
+    callback: EventCallback<T>
+  ): void {
+    this.eventSystem.off(event, callback)
+  }
+
+  public removeAllListeners(event?: string): void {
+    this.eventSystem.removeAllListeners(event)
+  }
+
+  public emit<T extends FlowEvent = FlowEvent>(
+    event: string,
+    eventData: T
+  ): boolean {
+    return this.eventSystem.emit(event, eventData)
+  }
+
+  // Event system utility methods
+  public getListenerCount(event?: string): number {
+    return this.eventSystem.getListenerCount(event)
+  }
+
+  public hasListeners(event: string): boolean {
+    return this.eventSystem.hasListeners(event)
+  }
+
+  public getEventHistory(event?: string, limit?: number): FlowEvent[] {
+    return this.eventSystem.getEventHistory(event, limit)
+  }
+
+  public clearEventHistory(): void {
+    this.eventSystem.clearEventHistory()
+  }
+
+  public getEventStats(): {
+    totalListeners: number
+    eventTypes: number
+    historySize: number
+    maxHistorySize: number
+  } {
+    return this.eventSystem.getStats()
   }
 
   // Interaction system methods
@@ -300,5 +359,6 @@ export class FlowEditor {
   // Cleanup method
   public destroy(): void {
     this.interactionSystem.destroy()
+    this.eventSystem.destroy()
   }
 }

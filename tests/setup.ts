@@ -61,6 +61,19 @@ jest.mock('leafer-ui', () => ({
       Object.assign(this, props)
     }
   },
+  Path: class MockPath {
+    path = ''
+    stroke = ''
+    strokeWidth = 0
+    fill = ''
+    strokeLinecap = ''
+    strokeLinejoin = ''
+    data: any = {}
+
+    constructor(props: any) {
+      Object.assign(this, props)
+    }
+  },
 }))
 
 // Mock ResizeObserver

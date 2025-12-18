@@ -5,6 +5,7 @@ import { FlowNode } from '../components/FlowNode'
 import { FlowEdge } from '../components/FlowEdge'
 import { NodeManager } from '../managers/NodeManager'
 import { EdgeManager } from '../managers/EdgeManager'
+import { ViewportManager, ViewportState } from '../managers/ViewportManager'
 import { InteractionSystem } from '../systems/InteractionSystem'
 import { EventSystem, EventCallback } from '../systems/EventSystem'
 import {
@@ -19,6 +20,7 @@ export class FlowEditor {
   private _options: FlowOptions
   private nodeManager: NodeManager
   private edgeManager: EdgeManager
+  private viewportManager: ViewportManager
   private interactionSystem: InteractionSystem
   private eventSystem: EventSystem
 
@@ -54,6 +56,15 @@ export class FlowEditor {
       onEvent: this.handleEdgeEvent.bind(this),
     })
 
+    // Initialize ViewportManager with event handling
+    this.viewportManager = new ViewportManager({
+      minZoom: 0.1,
+      maxZoom: 5.0,
+      initialZoom: 1.0,
+      initialPosition: { x: 0, y: 0 },
+      onViewportChange: this.handleViewportChange.bind(this),
+    })
+
     // Initialize InteractionSystem with event handling
     this.interactionSystem = new InteractionSystem({
       onEvent: this.handleInteractionEvent.bind(this),
@@ -69,6 +80,9 @@ export class FlowEditor {
   private initialize(): void {
     // Initialize LeaferJS and core systems
     // This will be implemented in later tasks
+
+    // Initialize viewport manager with container
+    this.viewportManager.initialize(this._container)
 
     // Initialize interaction system with container
     this.interactionSystem.initialize(this._container)
@@ -122,6 +136,18 @@ export class FlowEditor {
 
     // Emit event through the centralized event system
     this.eventSystem.emitInteractionEvent(event)
+  }
+
+  private handleViewportChange(viewport: ViewportState): void {
+    // Handle viewport changes from ViewportManager
+    console.log('Viewport changed:', viewport)
+
+    // Emit viewport change event through the centralized event system
+    this.eventSystem.emit('viewport:changed', {
+      type: 'viewport:changed',
+      timestamp: Date.now(),
+      data: { viewport },
+    })
   }
 
   // Getters for private properties
@@ -250,19 +276,59 @@ export class FlowEditor {
   }
 
   // View control
-  public zoomTo(_scale: number): void {
-    // Implementation will be added in later tasks
-    throw new Error('Not implemented yet')
+  public zoomTo(scale: number, center?: { x: number; y: number }): void {
+    this.viewportManager.zoomTo(scale, center)
   }
 
-  public panTo(_x: number, _y: number): void {
-    // Implementation will be added in later tasks
-    throw new Error('Not implemented yet')
+  public zoomIn(factor?: number, center?: { x: number; y: number }): void {
+    this.viewportManager.zoomIn(factor, center)
+  }
+
+  public zoomOut(factor?: number, center?: { x: number; y: number }): void {
+    this.viewportManager.zoomOut(factor, center)
+  }
+
+  public resetZoom(): void {
+    this.viewportManager.resetZoom()
+  }
+
+  public panTo(x: number, y: number): void {
+    this.viewportManager.panTo(x, y)
+  }
+
+  public panBy(deltaX: number, deltaY: number): void {
+    this.viewportManager.panBy(deltaX, deltaY)
+  }
+
+  public centerView(): void {
+    this.viewportManager.centerView()
   }
 
   public fitView(): void {
-    // Implementation will be added in later tasks
-    throw new Error('Not implemented yet')
+    this.viewportManager.fitView()
+  }
+
+  public getViewport(): ViewportState {
+    return this.viewportManager.getViewport()
+  }
+
+  public setViewport(viewport: Partial<ViewportState>): void {
+    this.viewportManager.setViewport(viewport)
+  }
+
+  // Coordinate transformations
+  public screenToWorld(screenPoint: { x: number; y: number }): {
+    x: number
+    y: number
+  } {
+    return this.viewportManager.screenToWorld(screenPoint)
+  }
+
+  public worldToScreen(worldPoint: { x: number; y: number }): {
+    x: number
+    y: number
+  } {
+    return this.viewportManager.worldToScreen(worldPoint)
   }
 
   // Event system - Public API
@@ -358,6 +424,7 @@ export class FlowEditor {
 
   // Cleanup method
   public destroy(): void {
+    this.viewportManager.destroy()
     this.interactionSystem.destroy()
     this.eventSystem.destroy()
   }

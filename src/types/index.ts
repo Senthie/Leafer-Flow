@@ -34,10 +34,10 @@ export interface EdgeData {
 
 export interface PortData {
   id: string
-  type: "input" | "output"
+  type: 'input' | 'output'
   dataType?: string
   multiple?: boolean
-  position: "top" | "right" | "bottom" | "left"
+  position: 'top' | 'right' | 'bottom' | 'left'
 }
 
 export interface FlowOptions {
@@ -70,4 +70,17 @@ export interface EdgeStyle {
   strokeWidth?: number
   strokeDasharray?: string
   fill?: string
+}
+
+export interface ViewportState {
+  x: number
+  y: number
+  zoom: number
+}
+
+export interface ViewportBounds {
+  minX: number
+  maxX: number
+  minY: number
+  maxY: number
 }

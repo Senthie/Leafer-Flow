@@ -5,13 +5,15 @@ import { FlowNode } from '../components/FlowNode'
 import { FlowEdge } from '../components/FlowEdge'
 import { NodeManager } from '../managers/NodeManager'
 import { EdgeManager } from '../managers/EdgeManager'
-import { NodeEvent, EdgeEvent } from '../events/types'
+import { InteractionSystem } from '../systems/InteractionSystem'
+import { NodeEvent, EdgeEvent, InteractionEvent } from '../events/types'
 
 export class FlowEditor {
   private _container: HTMLElement
   private _options: FlowOptions
   private nodeManager: NodeManager
   private edgeManager: EdgeManager
+  private interactionSystem: InteractionSystem
 
   constructor(container: HTMLElement, options: Partial<FlowOptions> = {}) {
     this._container = container
@@ -39,12 +41,24 @@ export class FlowEditor {
       onEvent: this.handleEdgeEvent.bind(this),
     })
 
+    // Initialize InteractionSystem with event handling
+    this.interactionSystem = new InteractionSystem({
+      onEvent: this.handleInteractionEvent.bind(this),
+      getNodeById: (id: string) => this.nodeManager.getNode(id),
+      getEdgeById: (id: string) => this.edgeManager.getEdge(id),
+      getAllNodes: () => this.nodeManager.getAllNodes(),
+      getAllEdges: () => this.edgeManager.getAllEdges(),
+    })
+
     this.initialize()
   }
 
   private initialize(): void {
     // Initialize LeaferJS and core systems
     // This will be implemented in later tasks
+
+    // Initialize interaction system with container
+    this.interactionSystem.initialize(this._container)
   }
 
   private handleNodeEvent(event: NodeEvent): void {
@@ -65,6 +79,35 @@ export class FlowEditor {
     // Handle edge events from EdgeManager
     // This can be extended to trigger custom events or update UI
     console.log('Edge event:', event.type, event.data)
+
+    // Future: emit events to external listeners
+    // this.emit(event.type, event.data)
+  }
+
+  private handleInteractionEvent(event: InteractionEvent): void {
+    // Handle interaction events from InteractionSystem
+    console.log('Interaction event:', event.type, event.data)
+
+    // Handle selection deletion
+    if (event.type === 'selection:delete') {
+      const { nodeIds, edgeIds } = event.data
+
+      // Delete selected edges first
+      if (edgeIds) {
+        edgeIds.forEach(edgeId => this.removeEdge(edgeId))
+      }
+
+      // Delete selected nodes (this will also delete connected edges)
+      if (nodeIds) {
+        nodeIds.forEach(nodeId => this.removeNode(nodeId))
+      }
+    }
+
+    // Handle connection creation
+    if (event.type === 'connection:end' && event.data.connectionCreated) {
+      // Connection creation logic would be implemented here
+      // For now, this is handled by the interaction system validation
+    }
 
     // Future: emit events to external listeners
     // this.emit(event.type, event.data)
@@ -116,6 +159,7 @@ export class FlowEditor {
   public clearSelection(): void {
     this.nodeManager.clearSelection()
     this.edgeManager.clearSelection()
+    this.interactionSystem.clearSelection()
   }
 
   // Edge operations
@@ -221,6 +265,27 @@ export class FlowEditor {
     throw new Error('Not implemented yet')
   }
 
+  // Interaction system methods
+  public get isDragging(): boolean {
+    return this.interactionSystem.isDragging
+  }
+
+  public get isConnecting(): boolean {
+    return this.interactionSystem.isConnecting
+  }
+
+  public getInteractionSelectedNodes(): FlowNode[] {
+    return this.interactionSystem.getSelectedNodes()
+  }
+
+  public getInteractionSelectedEdges(): FlowEdge[] {
+    return this.interactionSystem.getSelectedEdges()
+  }
+
+  public hasInteractionSelection(): boolean {
+    return this.interactionSystem.hasSelection()
+  }
+
   // Serialization
   public toJSON(): FlowData {
     // Implementation will be added in later tasks
@@ -230,5 +295,10 @@ export class FlowEditor {
   public fromJSON(_data: FlowData): void {
     // Implementation will be added in later tasks
     throw new Error('Not implemented yet')
+  }
+
+  // Cleanup method
+  public destroy(): void {
+    this.interactionSystem.destroy()
   }
 }

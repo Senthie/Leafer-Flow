@@ -58,27 +58,7 @@ export class FlowPort {
   }
 
   public getAbsolutePosition(): { x: number; y: number } {
-    // This will be implemented when integrating with LeaferJS rendering
-    // For now, return relative position based on parent node
-    const nodePos = this.parentNode.position
-
-    // Simple offset calculation based on position
-    const offset = this.getPositionOffset()
-    return {
-      x: nodePos.x + offset.x,
-      y: nodePos.y + offset.y,
-    }
-  }
-
-  private getPositionOffset(): { x: number; y: number } {
-    // Default offsets - will be refined with actual node dimensions
-    const offsets = {
-      top: { x: 0, y: -20 },
-      right: { x: 50, y: 0 },
-      bottom: { x: 0, y: 20 },
-      left: { x: -50, y: 0 },
-    }
-
-    return offsets[this.position]
+    // Use the parent node's method to get absolute position
+    return this.parentNode.getPortAbsolutePosition(this.id) || { x: 0, y: 0 }
   }
 }

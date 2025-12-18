@@ -5,13 +5,21 @@ import * as fc from 'fast-check'
 import { FlowNode } from '../../src/components/FlowNode'
 
 describe('Property-based tests for node creation', () => {
+  // Helper function to compare numbers that handles -0 vs 0
+  const expectNumbersEqual = (actual: number, expected: number) => {
+    if (Object.is(actual, expected) || (actual === 0 && expected === 0)) {
+      return true
+    }
+    return false
+  }
+
   // Simple generator for valid node data without ports first
   const simpleNodeDataArbitrary = fc.record({
     id: fc.string({ minLength: 1, maxLength: 50 }),
     type: fc.string({ minLength: 1, maxLength: 30 }),
     position: fc.record({
-      x: fc.float({ min: -10000, max: 10000 }),
-      y: fc.float({ min: -10000, max: 10000 }),
+      x: fc.float({ min: -10000, max: 10000, noNaN: true }),
+      y: fc.float({ min: -10000, max: 10000, noNaN: true }),
     }),
     data: fc.oneof(
       fc.constant({}),
@@ -26,8 +34,8 @@ describe('Property-based tests for node creation', () => {
     id: fc.string({ minLength: 1, maxLength: 50 }),
     type: fc.string({ minLength: 1, maxLength: 30 }),
     position: fc.record({
-      x: fc.float({ min: -10000, max: 10000 }),
-      y: fc.float({ min: -10000, max: 10000 }),
+      x: fc.float({ min: -10000, max: 10000, noNaN: true }),
+      y: fc.float({ min: -10000, max: 10000, noNaN: true }),
     }),
     data: fc.oneof(fc.constant({}), fc.constant({ label: 'test' })),
     ports: fc.array(
@@ -107,8 +115,12 @@ describe('Property-based tests for node creation', () => {
         const node = new FlowNode(nodeData)
 
         // Requirement 1.1: Node should be created at specified position
-        expect(node.position.x).toBe(nodeData.position.x)
-        expect(node.position.y).toBe(nodeData.position.y)
+        expect(expectNumbersEqual(node.position.x, nodeData.position.x)).toBe(
+          true
+        )
+        expect(expectNumbersEqual(node.position.y, nodeData.position.y)).toBe(
+          true
+        )
 
         // Requirement 1.2: Node should have unique identifier
         expect(node.id).toBe(nodeData.id)
@@ -137,8 +149,12 @@ describe('Property-based tests for node creation', () => {
         const node = new FlowNode(nodeData)
 
         // Requirement 1.1: Node should be created at specified position
-        expect(node.position.x).toBe(nodeData.position.x)
-        expect(node.position.y).toBe(nodeData.position.y)
+        expect(expectNumbersEqual(node.position.x, nodeData.position.x)).toBe(
+          true
+        )
+        expect(expectNumbersEqual(node.position.y, nodeData.position.y)).toBe(
+          true
+        )
 
         // Requirement 1.2: Node should have unique identifier
         expect(node.id).toBe(nodeData.id)
@@ -242,7 +258,7 @@ describe('Property-based tests for node creation', () => {
         nodeData.position.x = originalX + 100
 
         // Node position should not be affected
-        expect(node.position.x).toBe(originalX)
+        expect(expectNumbersEqual(node.position.x, originalX)).toBe(true)
         expect(node.position).not.toBe(nodeData.position)
       }),
       { numRuns: 100 }

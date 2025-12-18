@@ -1,40 +1,67 @@
 // Jest setup file for Leafer-Flow tests
 
-// Mock DOM environment for LeaferJS
-Object.defineProperty(window, "HTMLCanvasElement", {
-  value: class HTMLCanvasElement {
-    getContext() {
-      return {
-        fillRect: jest.fn(),
-        clearRect: jest.fn(),
-        getImageData: jest.fn(() => ({ data: new Array(4) })),
-        putImageData: jest.fn(),
-        createImageData: jest.fn(() => ({ data: new Array(4) })),
-        setTransform: jest.fn(),
-        drawImage: jest.fn(),
-        save: jest.fn(),
-        restore: jest.fn(),
-        beginPath: jest.fn(),
-        moveTo: jest.fn(),
-        lineTo: jest.fn(),
-        closePath: jest.fn(),
-        stroke: jest.fn(),
-        fill: jest.fn(),
-        measureText: jest.fn(() => ({ width: 0 })),
-        transform: jest.fn(),
-        translate: jest.fn(),
-        scale: jest.fn(),
-        rotate: jest.fn(),
-        arc: jest.fn(),
-        fillText: jest.fn(),
-        strokeText: jest.fn(),
+// Mock LeaferJS components
+jest.mock('leafer-ui', () => ({
+  Group: class MockGroup {
+    private _x = 0
+    private _y = 0
+    children: any[] = []
+    tag?: string
+
+    get x() {
+      return this._x
+    }
+    set x(value: number) {
+      this._x = value
+    }
+
+    get y() {
+      return this._y
+    }
+    set y(value: number) {
+      this._y = value
+    }
+
+    add(child: any) {
+      this.children.push(child)
+    }
+
+    remove(child: any) {
+      const index = this.children.indexOf(child)
+      if (index > -1) {
+        this.children.splice(index, 1)
       }
     }
-    toDataURL() {
-      return ""
+  },
+  Rect: class MockRect {
+    width = 0
+    height = 0
+    fill = ''
+    stroke = ''
+    strokeWidth = 0
+    cornerRadius = 0
+    x = 0
+    y = 0
+    tag?: string
+
+    constructor(props: any) {
+      Object.assign(this, props)
     }
   },
-})
+  Text: class MockText {
+    text = ''
+    fontSize = 12
+    fill = ''
+    textAlign = ''
+    verticalAlign = ''
+    x = 0
+    y = 0
+
+    constructor(props: any) {
+      Object.assign(this, props)
+    }
+  },
+}))
 
 // Mock ResizeObserver
 global.ResizeObserver = class ResizeObserver {

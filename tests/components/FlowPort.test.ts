@@ -163,12 +163,16 @@ describe('FlowPort', () => {
 
   describe('position calculation', () => {
     it('should calculate absolute position based on parent node', () => {
-      const port = new FlowPort(portData, parentNode)
+      // Add the port to the parent node first
+      parentNode.addPort(portData)
+      const port = parentNode.getPort('port-1')!
+
       const position = port.getAbsolutePosition()
 
-      // Should be parent position + offset for left position
-      expect(position.x).toBe(50) // 100 - 50
-      expect(position.y).toBe(200) // 200 + 0
+      // Should be parent position + port position (left side of node)
+      // Left position: x = node.x + 0, y = node.y + height/2
+      expect(position.x).toBe(100) // node x + 0 (left edge)
+      expect(position.y).toBe(230) // node y + 30 (middle height: 200 + 60/2)
     })
 
     it('should calculate different offsets for different positions', () => {

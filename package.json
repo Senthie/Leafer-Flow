@@ -1,0 +1,42 @@
+{
+  "name": "leafer-flow",
+  "version": "1.0.0",
+  "description": "A high-performance workflow visualization library built on LeaferJS",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "pnpm exec tsc",
+    "dev": "pnpm exec tsc --watch",
+    "test": "pnpm exec jest",
+    "test:watch": "pnpm exec jest --watch",
+    "test:coverage": "pnpm exec jest --coverage",
+    "lint": "pnpm exec eslint src/**/*.ts",
+    "clean": "pnpm exec rimraf dist",
+    "preinstall": "npx only-allow pnpm"
+  },
+  "keywords": [
+    "workflow",
+    "visualization",
+    "leaferjs",
+    "flow-editor",
+    "typescript"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "fast-check": "^3.15.0",
+    "jest": "^29.5.0",
+    "jest-environment-jsdom": "^30.2.0",
+    "only-allow": "^1.2.2",
+    "rimraf": "^5.0.0",
+    "ts-jest": "^29.1.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "leafer-ui": "^1.0.0"
+  }
+}

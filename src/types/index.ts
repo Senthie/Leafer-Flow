@@ -50,6 +50,14 @@ export interface FlowOptions {
   controls?: boolean
   nodeTypes?: Record<string, NodeTypeDefinition>
   edgeTypes?: Record<string, EdgeTypeDefinition>
+  // Advanced options
+  enableHistory?: boolean
+  maxHistorySize?: number
+  enablePerformanceOptimization?: boolean
+  maxVisibleNodes?: number
+  maxVisibleEdges?: number
+  enableLevelOfDetail?: boolean
+  lodThreshold?: number
 }
 
 export interface NodeTypeDefinition {
@@ -57,12 +65,33 @@ export interface NodeTypeDefinition {
   ports?: PortData[]
   defaultData?: any
   validate?: (data: any) => boolean
+  // Advanced rendering options
+  getSize?: (data: any) => { width: number; height: number }
+  getPortPositions?: (
+    data: any,
+    size: { width: number; height: number }
+  ) => Array<{
+    id: string
+    x: number
+    y: number
+  }>
+  theme?: {
+    colors?: Record<string, string>
+    sizes?: Record<string, number>
+  }
 }
 
 export interface EdgeTypeDefinition {
   render: (edge: any) => any // Will be properly typed with LeaferJS types later
   style?: any
   validate?: (data: any) => boolean
+  // Advanced rendering options
+  pathType?: 'bezier' | 'straight' | 'orthogonal' | 'smooth-step'
+  animated?: boolean
+  theme?: {
+    colors?: Record<string, string>
+    sizes?: Record<string, number>
+  }
 }
 
 export interface EdgeStyle {

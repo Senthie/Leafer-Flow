@@ -1,6 +1,6 @@
 // Main FlowEditor class - entry point for Leafer-Flow
 
-import { FlowOptions, NodeData, EdgeData } from '../types'
+import { FlowOptions, NodeData, EdgeData, PortData } from '../types'
 import { FlowNode } from '../components/FlowNode'
 import { FlowEdge } from '../components/FlowEdge'
 import { NodeManager } from '../managers/NodeManager'
@@ -12,6 +12,10 @@ import {
 } from '../managers/SerializationManager'
 import { InteractionSystem } from '../systems/InteractionSystem'
 import { EventSystem, EventCallback } from '../systems/EventSystem'
+import { HistorySystem } from '../systems/HistorySystem'
+import { PerformanceSystem } from '../systems/PerformanceSystem'
+import { NodeRenderer } from '../rendering/NodeRenderer'
+import { EdgeRenderer, EdgePathType } from '../rendering/EdgeRenderer'
 import {
   NodeEvent,
   EdgeEvent,
@@ -27,6 +31,10 @@ export class FlowEditor {
   private viewportManager: ViewportManager
   private interactionSystem: InteractionSystem
   private eventSystem: EventSystem
+  private historySystem: HistorySystem
+  private performanceSystem: PerformanceSystem
+  private nodeRenderer: NodeRenderer
+  private edgeRenderer: EdgeRenderer
 
   constructor(container: HTMLElement, options: Partial<FlowOptions> = {}) {
     this._container = container
@@ -40,6 +48,15 @@ export class FlowEditor {
       controls: options.controls ?? true,
       nodeTypes: options.nodeTypes || {},
       edgeTypes: options.edgeTypes || {},
+      // Advanced options
+      enableHistory: options.enableHistory ?? true,
+      maxHistorySize: options.maxHistorySize ?? 100,
+      enablePerformanceOptimization:
+        options.enablePerformanceOptimization ?? true,
+      maxVisibleNodes: options.maxVisibleNodes ?? 1000,
+      maxVisibleEdges: options.maxVisibleEdges ?? 2000,
+      enableLevelOfDetail: options.enableLevelOfDetail ?? true,
+      lodThreshold: options.lodThreshold ?? 0.5,
     }
 
     // Initialize EventSystem first
@@ -47,6 +64,23 @@ export class FlowEditor {
       maxListeners: 1000,
       enableLogging: false, // Can be made configurable
     })
+
+    // Initialize advanced systems
+    this.historySystem = new HistorySystem({
+      maxHistorySize: this._options.maxHistorySize || 100,
+      enableLogging: false,
+    })
+
+    this.performanceSystem = new PerformanceSystem({
+      enableVirtualization: this._options.enablePerformanceOptimization || true,
+      maxVisibleNodes: this._options.maxVisibleNodes || 1000,
+      maxVisibleEdges: this._options.maxVisibleEdges || 2000,
+      enableLevelOfDetail: this._options.enableLevelOfDetail || true,
+      lodThreshold: this._options.lodThreshold || 0.5,
+    })
+
+    this.nodeRenderer = new NodeRenderer()
+    this.edgeRenderer = new EdgeRenderer()
 
     // Initialize NodeManager with event handling
     this.nodeManager = new NodeManager({
@@ -165,11 +199,93 @@ export class FlowEditor {
 
   // Node operations
   public addNode(nodeData: NodeData): FlowNode {
-    return this.nodeManager.createNode(nodeData)
+    const node = this.nodeManager.createNode(nodeData)
+
+    // Record action for undo/redo
+    this.historySystem.recordAction({
+      type: 'node:create',
+      timestamp: Date.now(),
+      data: { nodeData },
+      undo: () => {
+        this.nodeManager.deleteNode(nodeData.id)
+      },
+      redo: () => {
+        this.nodeManager.createNode(nodeData)
+      },
+    })
+
+    // Invalidate performance cache
+    this.performanceSystem.invalidateCache()
+
+    return node
   }
 
   public removeNode(nodeId: string): boolean {
-    return this.nodeManager.deleteNode(nodeId)
+    const node = this.nodeManager.getNode(nodeId)
+    if (!node) {
+      return false
+    }
+
+    // Store node data for undo
+    const nodeData: NodeData = {
+      id: node.id,
+      type: node.type,
+      position: node.position,
+      data: node.data,
+      ports: node.getAllPorts().map(port => {
+        const portData: PortData = {
+          id: port.id,
+          type: port.type,
+          multiple: port.multiple,
+          position: port.position,
+        }
+        if (port.dataType) {
+          portData.dataType = port.dataType
+        }
+        return portData
+      }),
+    }
+
+    // Store connected edges for undo
+    const connectedEdges = this.edgeManager.getEdgesByNode(nodeId)
+    const edgesData = connectedEdges.map(edge => ({
+      id: edge.id,
+      source: edge.source.id,
+      sourcePort: edge.sourcePort.id,
+      target: edge.target.id,
+      targetPort: edge.targetPort.id,
+      data: edge.edgeData,
+    }))
+
+    const result = this.nodeManager.deleteNode(nodeId)
+
+    if (result) {
+      // Record action for undo/redo
+      this.historySystem.recordAction({
+        type: 'node:delete',
+        timestamp: Date.now(),
+        data: { nodeData, edgesData },
+        undo: () => {
+          this.nodeManager.createNode(nodeData)
+          // Restore edges
+          edgesData.forEach(edgeData => {
+            const sourceNode = this.nodeManager.getNode(edgeData.source)
+            const targetNode = this.nodeManager.getNode(edgeData.target)
+            if (sourceNode && targetNode) {
+              this.edgeManager.createEdge(edgeData, sourceNode, targetNode)
+            }
+          })
+        },
+        redo: () => {
+          this.nodeManager.deleteNode(nodeId)
+        },
+      })
+
+      // Invalidate performance cache
+      this.performanceSystem.invalidateCache()
+    }
+
+    return result
   }
 
   public getNode(nodeId: string): FlowNode | null {
@@ -216,11 +332,72 @@ export class FlowEditor {
       throw new Error(`Target node '${edgeData.target}' not found`)
     }
 
-    return this.edgeManager.createEdge(edgeData, sourceNode, targetNode)
+    const edge = this.edgeManager.createEdge(edgeData, sourceNode, targetNode)
+
+    // Record action for undo/redo
+    this.historySystem.recordAction({
+      type: 'edge:create',
+      timestamp: Date.now(),
+      data: { edgeData },
+      undo: () => {
+        this.edgeManager.deleteEdge(edgeData.id)
+      },
+      redo: () => {
+        const srcNode = this.nodeManager.getNode(edgeData.source)
+        const tgtNode = this.nodeManager.getNode(edgeData.target)
+        if (srcNode && tgtNode) {
+          this.edgeManager.createEdge(edgeData, srcNode, tgtNode)
+        }
+      },
+    })
+
+    // Invalidate performance cache
+    this.performanceSystem.invalidateCache()
+
+    return edge
   }
 
   public removeEdge(edgeId: string): boolean {
-    return this.edgeManager.deleteEdge(edgeId)
+    const edge = this.edgeManager.getEdge(edgeId)
+    if (!edge) {
+      return false
+    }
+
+    // Store edge data for undo
+    const edgeData: EdgeData = {
+      id: edge.id,
+      source: edge.source.id,
+      sourcePort: edge.sourcePort.id,
+      target: edge.target.id,
+      targetPort: edge.targetPort.id,
+      data: edge.edgeData,
+    }
+
+    const result = this.edgeManager.deleteEdge(edgeId)
+
+    if (result) {
+      // Record action for undo/redo
+      this.historySystem.recordAction({
+        type: 'edge:delete',
+        timestamp: Date.now(),
+        data: { edgeData },
+        undo: () => {
+          const sourceNode = this.nodeManager.getNode(edgeData.source)
+          const targetNode = this.nodeManager.getNode(edgeData.target)
+          if (sourceNode && targetNode) {
+            this.edgeManager.createEdge(edgeData, sourceNode, targetNode)
+          }
+        },
+        redo: () => {
+          this.edgeManager.deleteEdge(edgeId)
+        },
+      })
+
+      // Invalidate performance cache
+      this.performanceSystem.invalidateCache()
+    }
+
+    return result
   }
 
   public getEdge(edgeId: string): FlowEdge | null {
@@ -478,10 +655,141 @@ export class FlowEditor {
     this.viewportManager.centerView()
   }
 
+  // Undo/Redo operations
+  public undo(): boolean {
+    return this.historySystem.undo()
+  }
+
+  public redo(): boolean {
+    return this.historySystem.redo()
+  }
+
+  public canUndo(): boolean {
+    return this.historySystem.canUndo()
+  }
+
+  public canRedo(): boolean {
+    return this.historySystem.canRedo()
+  }
+
+  public clearHistory(): void {
+    this.historySystem.clear()
+  }
+
+  public getHistoryStats(): {
+    undoStackSize: number
+    redoStackSize: number
+    maxHistorySize: number
+    canUndo: boolean
+    canRedo: boolean
+  } {
+    return this.historySystem.getStats()
+  }
+
+  // Custom rendering methods
+  public registerNodeRenderer(nodeType: string, renderer: any): void {
+    this.nodeRenderer.registerRenderer(nodeType, renderer)
+  }
+
+  public unregisterNodeRenderer(nodeType: string): boolean {
+    return this.nodeRenderer.unregisterRenderer(nodeType)
+  }
+
+  public registerEdgeRenderer(edgeType: string, renderer: any): void {
+    this.edgeRenderer.registerRenderer(edgeType, renderer)
+  }
+
+  public unregisterEdgeRenderer(edgeType: string): boolean {
+    return this.edgeRenderer.unregisterRenderer(edgeType)
+  }
+
+  // Performance optimization methods
+  public updateVisibility(): {
+    visibleNodes: FlowNode[]
+    visibleEdges: FlowEdge[]
+    hiddenNodes: FlowNode[]
+    hiddenEdges: FlowEdge[]
+  } {
+    const viewport = this.getViewport()
+    const containerBounds = {
+      width: this._container.clientWidth,
+      height: this._container.clientHeight,
+    }
+
+    return this.performanceSystem.updateVisibility(
+      this.getAllNodes(),
+      this.getAllEdges(),
+      viewport,
+      containerBounds
+    )
+  }
+
+  public applyLevelOfDetail(): void {
+    const viewport = this.getViewport()
+    this.performanceSystem.applyLevelOfDetail(
+      this.getAllNodes(),
+      this.getAllEdges(),
+      viewport.zoom
+    )
+  }
+
+  public async batchOperation<T>(
+    items: T[],
+    operation: (item: T) => void,
+    onProgress?: (completed: number, total: number) => void
+  ): Promise<void> {
+    return this.performanceSystem.batchOperation(items, operation, onProgress)
+  }
+
+  public getPerformanceStats(): {
+    virtualizationEnabled: boolean
+    lodEnabled: boolean
+    batchingEnabled: boolean
+    cacheValid: boolean
+    visibleNodeCount: number
+    visibleEdgeCount: number
+  } {
+    return this.performanceSystem.getStats()
+  }
+
+  // Advanced rendering methods
+  public renderNodeWithCustomRenderer(
+    node: FlowNode,
+    options?: {
+      isSelected?: boolean
+      isHovered?: boolean
+      scale?: number
+    }
+  ): any {
+    return this.nodeRenderer.renderNode(node, options)
+  }
+
+  public renderEdgeWithCustomRenderer(
+    edge: FlowEdge,
+    options?: {
+      isSelected?: boolean
+      isHovered?: boolean
+      scale?: number
+      pathType?: EdgePathType
+    }
+  ): any {
+    return this.edgeRenderer.renderEdge(edge, options)
+  }
+
+  public generateEdgePath(
+    sourcePos: { x: number; y: number },
+    targetPos: { x: number; y: number },
+    pathType: EdgePathType = 'bezier'
+  ): string {
+    return this.edgeRenderer.generatePath(sourcePos, targetPos, pathType)
+  }
+
   // Cleanup method
   public destroy(): void {
     this.viewportManager.destroy()
     this.interactionSystem.destroy()
     this.eventSystem.destroy()
+    this.historySystem.clear()
+    this.performanceSystem.invalidateCache()
   }
 }

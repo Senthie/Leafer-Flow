@@ -1,10 +1,10 @@
 // Leafer-Flow - 基于LeaferJS的工作流可视化工具库
 // Main entry point
 
-export { FlowEditor } from "./core/FlowEditor"
-export { FlowNode } from "./components/FlowNode"
-export { FlowEdge } from "./components/FlowEdge"
-export { FlowPort } from "./components/FlowPort"
+export { FlowEditor } from './core/FlowEditor'
+export { FlowNode } from './components/FlowNode'
+export { FlowEdge } from './components/FlowEdge'
+export { FlowPort } from './components/FlowPort'
 
 // Types and interfaces
 export type {
@@ -15,10 +15,19 @@ export type {
   FlowOptions,
   NodeTypeDefinition,
   EdgeTypeDefinition,
-} from "./types"
+} from './types'
 
 // Error types
-export { FlowError, FlowErrorType } from "./errors/FlowError"
+export { FlowError, FlowErrorType } from './errors/FlowError'
+
+// Validation functions
+export {
+  validateNodeData,
+  validateEdgeData,
+  validatePortData,
+  validateFlowData,
+  validateConnection,
+} from './validation'
 
 // Event types
-export type { FlowEvent } from "./events/types"
+export type { FlowEvent } from './events/types'

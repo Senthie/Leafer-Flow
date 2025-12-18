@@ -6,6 +6,9 @@ export { FlowNode } from './components/FlowNode'
 export { FlowEdge } from './components/FlowEdge'
 export { FlowPort } from './components/FlowPort'
 
+// Managers
+export { NodeManager } from './managers/NodeManager'
+
 // Types and interfaces
 export type {
   FlowData,

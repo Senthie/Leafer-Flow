@@ -1,5 +1,6 @@
 // Main FlowEditor class - entry point for Leafer-Flow
 
+import { App, Leafer, Group, Rect } from 'leafer-ui'
 import { FlowOptions, NodeData, EdgeData, PortData } from '../types'
 import { FlowNode } from '../components/FlowNode'
 import { FlowEdge } from '../components/FlowEdge'
@@ -35,6 +36,13 @@ export class FlowEditor {
   private performanceSystem: PerformanceSystem
   private nodeRenderer: NodeRenderer
   private edgeRenderer: EdgeRenderer
+
+  // LeaferJS rendering layer
+  private leaferApp: App | null = null
+  private contentLayer: Leafer | null = null
+  private nodesGroup: Group | null = null
+  private edgesGroup: Group | null = null
+  private gridLayer: Leafer | null = null
 
   constructor(container: HTMLElement, options: Partial<FlowOptions> = {}) {
     this._container = container
@@ -116,14 +124,125 @@ export class FlowEditor {
   }
 
   private initialize(): void {
-    // Initialize LeaferJS and core systems
-    // This will be implemented in later tasks
+    // Initialize LeaferJS App
+    this.initializeLeaferApp()
 
     // Initialize viewport manager with container
     this.viewportManager.initialize(this._container)
 
     // Initialize interaction system with container
     this.interactionSystem.initialize(this._container)
+  }
+
+  private initializeLeaferApp(): void {
+    // Get container dimensions
+    const width = this._options.width || this._container.clientWidth || 800
+    const height = this._options.height || this._container.clientHeight || 600
+
+    // Create LeaferJS App with multiple layers
+    this.leaferApp = new App({
+      view: this._container,
+      width,
+      height,
+    })
+
+    // Create grid layer (background)
+    if (this._options.grid) {
+      this.gridLayer = this.leaferApp.addLeafer()
+      this.renderGrid()
+    }
+
+    // Create content layer for nodes and edges
+    this.contentLayer = this.leaferApp.addLeafer()
+
+    // Create groups for organizing elements
+    this.edgesGroup = new Group()
+    this.nodesGroup = new Group()
+
+    // Add groups to content layer (edges below nodes)
+    this.contentLayer.add(this.edgesGroup)
+    this.contentLayer.add(this.nodesGroup)
+
+    // Set background color
+    if (this._options.background) {
+      const background = new Rect({
+        width: this._options.width,
+        height: this._options.height,
+        fill: this._options.background,
+      })
+      if (this.gridLayer) {
+        this.gridLayer.add(background)
+      } else {
+        this.contentLayer.add(background)
+      }
+    }
+
+    console.log('LeaferJS App initialized', {
+      width: this._options.width,
+      height: this._options.height,
+      grid: this._options.grid,
+    })
+  }
+
+  private renderGrid(): void {
+    if (!this.gridLayer) return
+
+    const gridSize = 20
+    const width = this._options.width || 800
+    const height = this._options.height || 600
+    const gridColor = '#e0e0e0'
+
+    // Create vertical lines
+    for (let x = 0; x <= width; x += gridSize) {
+      const line = new Rect({
+        x,
+        y: 0,
+        width: 1,
+        height,
+        fill: gridColor,
+      })
+      this.gridLayer.add(line)
+    }
+
+    // Create horizontal lines
+    for (let y = 0; y <= height; y += gridSize) {
+      const line = new Rect({
+        x: 0,
+        y,
+        width,
+        height: 1,
+        fill: gridColor,
+      })
+      this.gridLayer.add(line)
+    }
+  }
+
+  // Add node to the rendering layer
+  private addNodeToRenderLayer(node: FlowNode): void {
+    if (this.nodesGroup) {
+      this.nodesGroup.add(node)
+    }
+  }
+
+  // Remove node from the rendering layer
+  private removeNodeFromRenderLayer(node: FlowNode): void {
+    if (this.nodesGroup && node.parent === this.nodesGroup) {
+      this.nodesGroup.remove(node)
+    }
+  }
+
+  // Add edge to the rendering layer
+  private addEdgeToRenderLayer(edge: FlowEdge): void {
+    if (this.edgesGroup) {
+      this.edgesGroup.add(edge)
+    }
+  }
+
+  // Remove edge from the rendering layer
+  private removeEdgeFromRenderLayer(edge: FlowEdge): void {
+    if (this.edgesGroup && edge.parent === this.edgesGroup) {
+      this.edgesGroup.remove(edge)
+    }
   }
 
   private handleNodeEvent(event: NodeEvent): void {
@@ -201,16 +320,24 @@ export class FlowEditor {
   public addNode(nodeData: NodeData): FlowNode {
     const node = this.nodeManager.createNode(nodeData)
 
+    // Add node to the rendering layer
+    this.addNodeToRenderLayer(node)
+
     // Record action for undo/redo
     this.historySystem.recordAction({
       type: 'node:create',
       timestamp: Date.now(),
       data: { nodeData },
       undo: () => {
+        const nodeToRemove = this.nodeManager.getNode(nodeData.id)
+        if (nodeToRemove) {
+          this.removeNodeFromRenderLayer(nodeToRemove)
+        }
         this.nodeManager.deleteNode(nodeData.id)
       },
       redo: () => {
-        this.nodeManager.createNode(nodeData)
+        const restoredNode = this.nodeManager.createNode(nodeData)
+        this.addNodeToRenderLayer(restoredNode)
       },
     })
 
@@ -257,6 +384,14 @@ export class FlowEditor {
       data: edge.edgeData,
     }))
 
+    // Remove connected edges from render layer first
+    connectedEdges.forEach(edge => {
+      this.removeEdgeFromRenderLayer(edge)
+    })
+
+    // Remove node from render layer
+    this.removeNodeFromRenderLayer(node)
+
     const result = this.nodeManager.deleteNode(nodeId)
 
     if (result) {
@@ -266,17 +401,27 @@ export class FlowEditor {
         timestamp: Date.now(),
         data: { nodeData, edgesData },
         undo: () => {
-          this.nodeManager.createNode(nodeData)
+          const restoredNode = this.nodeManager.createNode(nodeData)
+          this.addNodeToRenderLayer(restoredNode)
           // Restore edges
           edgesData.forEach(edgeData => {
             const sourceNode = this.nodeManager.getNode(edgeData.source)
             const targetNode = this.nodeManager.getNode(edgeData.target)
             if (sourceNode && targetNode) {
-              this.edgeManager.createEdge(edgeData, sourceNode, targetNode)
+              const restoredEdge = this.edgeManager.createEdge(
+                edgeData,
+                sourceNode,
+                targetNode
+              )
+              this.addEdgeToRenderLayer(restoredEdge)
             }
           })
         },
         redo: () => {
+          const nodeToRemove = this.nodeManager.getNode(nodeId)
+          if (nodeToRemove) {
+            this.removeNodeFromRenderLayer(nodeToRemove)
+          }
           this.nodeManager.deleteNode(nodeId)
         },
       })
@@ -334,19 +479,31 @@ export class FlowEditor {
 
     const edge = this.edgeManager.createEdge(edgeData, sourceNode, targetNode)
 
+    // Add edge to the rendering layer
+    this.addEdgeToRenderLayer(edge)
+
     // Record action for undo/redo
     this.historySystem.recordAction({
       type: 'edge:create',
       timestamp: Date.now(),
       data: { edgeData },
       undo: () => {
+        const edgeToRemove = this.edgeManager.getEdge(edgeData.id)
+        if (edgeToRemove) {
+          this.removeEdgeFromRenderLayer(edgeToRemove)
+        }
         this.edgeManager.deleteEdge(edgeData.id)
       },
       redo: () => {
         const srcNode = this.nodeManager.getNode(edgeData.source)
         const tgtNode = this.nodeManager.getNode(edgeData.target)
         if (srcNode && tgtNode) {
-          this.edgeManager.createEdge(edgeData, srcNode, tgtNode)
+          const restoredEdge = this.edgeManager.createEdge(
+            edgeData,
+            srcNode,
+            tgtNode
+          )
+          this.addEdgeToRenderLayer(restoredEdge)
         }
       },
     })
@@ -373,6 +530,9 @@ export class FlowEditor {
       data: edge.edgeData,
     }
 
+    // Remove edge from render layer
+    this.removeEdgeFromRenderLayer(edge)
+
     const result = this.edgeManager.deleteEdge(edgeId)
 
     if (result) {
@@ -385,10 +545,19 @@ export class FlowEditor {
           const sourceNode = this.nodeManager.getNode(edgeData.source)
           const targetNode = this.nodeManager.getNode(edgeData.target)
           if (sourceNode && targetNode) {
-            this.edgeManager.createEdge(edgeData, sourceNode, targetNode)
+            const restoredEdge = this.edgeManager.createEdge(
+              edgeData,
+              sourceNode,
+              targetNode
+            )
+            this.addEdgeToRenderLayer(restoredEdge)
           }
         },
         redo: () => {
+          const edgeToRemove = this.edgeManager.getEdge(edgeId)
+          if (edgeToRemove) {
+            this.removeEdgeFromRenderLayer(edgeToRemove)
+          }
           this.edgeManager.deleteEdge(edgeId)
         },
       })
@@ -791,5 +960,15 @@ export class FlowEditor {
     this.eventSystem.destroy()
     this.historySystem.clear()
     this.performanceSystem.invalidateCache()
+
+    // Destroy LeaferJS app
+    if (this.leaferApp) {
+      this.leaferApp.destroy()
+      this.leaferApp = null
+      this.contentLayer = null
+      this.nodesGroup = null
+      this.edgesGroup = null
+      this.gridLayer = null
+    }
   }
 }

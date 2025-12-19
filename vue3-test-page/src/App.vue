@@ -7,10 +7,13 @@
 
     <main class="app-main">
       <div class="editor-container">
-        <div class="editor-placeholder">
-          <p>编辑器容器将在此处初始化</p>
-          <p>项目结构搭建完成，等待后续组件实现</p>
-        </div>
+        <FlowEditorContainer
+          :background="editorBackground"
+          :show-grid="showGrid"
+          @editor-ready="onEditorReady"
+          @editor-error="onEditorError"
+          @editor-destroyed="onEditorDestroyed"
+        />
       </div>
 
       <aside class="control-panel">
@@ -24,7 +27,37 @@
         <div class="panel">
           <div class="panel-header">状态信息</div>
           <div class="panel-body">
-            <p>状态信息将在此处显示</p>
+            <div v-if="editorInstance">
+              <p><strong>编辑器状态:</strong> {{ editorStatus }}</p>
+              <p><strong>节点数量:</strong> {{ nodeCount }}</p>
+              <p><strong>连接数量:</strong> {{ edgeCount }}</p>
+            </div>
+            <p v-else>等待编辑器初始化...</p>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">编辑器配置</div>
+          <div class="panel-body">
+            <div class="form-group">
+              <label class="form-label">
+                <input
+                  type="checkbox"
+                  v-model="showGrid"
+                  style="margin-right: 8px"
+                />
+                显示网格
+              </label>
+            </div>
+            <div class="form-group">
+              <label class="form-label">背景颜色:</label>
+              <input
+                type="color"
+                v-model="editorBackground"
+                class="form-input"
+                style="height: 32px"
+              />
+            </div>
           </div>
         </div>
       </aside>
@@ -33,7 +66,60 @@
 </template>
 
 <script setup lang="ts">
-// 基础应用组件，后续将添加完整功能
+import { ref, computed } from 'vue'
+import FlowEditorContainer from './components/FlowEditorContainer.vue'
+// import type { FlowEditor } from '../../dist'
+
+// 应用状态
+const editorInstance = ref<any>(null)
+const nodeCount = ref(0)
+const edgeCount = ref(0)
+const editorBackground = ref('#ffffff')
+const showGrid = ref(true)
+
+// 计算属性
+const editorStatus = computed(() => {
+  if (!editorInstance.value) return '未初始化'
+  return '已就绪'
+})
+
+// 编辑器事件处理
+const onEditorReady = (editor: any) => {
+  editorInstance.value = editor
+  updateCounts()
+
+  // 监听编辑器事件以更新状态
+  editor.on('node:created', updateCounts)
+  editor.on('node:deleted', updateCounts)
+  editor.on('edge:created', updateCounts)
+  editor.on('edge:deleted', updateCounts)
+
+  console.log('编辑器已就绪:', editor)
+}
+
+const onEditorError = (error: Error) => {
+  console.error('编辑器错误:', error)
+  editorInstance.value = null
+  nodeCount.value = 0
+  edgeCount.value = 0
+}
+
+const onEditorDestroyed = () => {
+  console.log('编辑器已销毁')
+  editorInstance.value = null
+  nodeCount.value = 0
+  edgeCount.value = 0
+}
+
+// 更新计数
+const updateCounts = () => {
+  if (editorInstance.value) {
+    nodeCount.value = editorInstance.value.getAllNodes().length
+    edgeCount.value = editorInstance.value.getAllEdges().length
+  }
+}
+
+// 初始化日志
 console.log('Vue3测试页面已加载')
 </script>
 
@@ -73,24 +159,9 @@ console.log('Vue3测试页面已加载')
 
 .editor-container {
   flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  padding: 16px;
   background-color: #fafafa;
   border-right: 1px solid var(--border-color-light);
-}
-
-.editor-placeholder {
-  text-align: center;
-  color: var(--text-color-secondary);
-  padding: 40px;
-  border: 2px dashed var(--border-color);
-  border-radius: var(--border-radius);
-  background-color: var(--bg-color);
-}
-
-.editor-placeholder p {
-  margin-bottom: 8px;
 }
 
 .control-panel {

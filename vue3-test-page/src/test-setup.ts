@@ -28,3 +28,44 @@ global.IntersectionObserver = vi.fn().mockImplementation(() => ({
   unobserve: vi.fn(),
   disconnect: vi.fn(),
 }))
+
+// Mock Canvas APIs
+global.CanvasRenderingContext2D = vi.fn().mockImplementation(() => ({}))
+global.Path2D = vi.fn().mockImplementation(() => ({}))
+global.HTMLCanvasElement = vi.fn().mockImplementation(() => ({
+  getContext: vi.fn(() => ({})),
+  width: 800,
+  height: 600,
+}))
+
+// Mock PointerEvent
+global.PointerEvent = vi.fn().mockImplementation(() => ({}))
+
+// Mock additional Canvas-related globals
+Object.defineProperty(window, 'CanvasRenderingContext2D', {
+  writable: true,
+  value: vi.fn().mockImplementation(() => ({})),
+})
+
+Object.defineProperty(window, 'Path2D', {
+  writable: true,
+  value: vi.fn().mockImplementation(() => ({})),
+})
+
+Object.defineProperty(window, 'PointerEvent', {
+  writable: true,
+  value: vi.fn().mockImplementation(() => ({})),
+})
+
+// Mock the FlowEditor module to avoid Canvas issues
+vi.mock('../../../dist', () => ({
+  FlowEditor: vi.fn().mockImplementation(() => ({
+    getAllNodes: () => [],
+    getAllEdges: () => [],
+    on: vi.fn(),
+    off: vi.fn(),
+    destroy: vi.fn(),
+    container: document.createElement('div'),
+    options: {},
+  })),
+}))

@@ -143,4 +143,118 @@ describe('ControlPanel', () => {
     const connectionButton = wrapper.find('button[disabled]')
     expect(connectionButton.exists()).toBe(true)
   })
+
+  it('should show confirmation dialog when clear canvas button is clicked', async () => {
+    // Mock having nodes and edges to clear
+    mockEditor.getAllNodes.mockReturnValue([
+      { id: 'node1', getAllPorts: () => [] },
+      { id: 'node2', getAllPorts: () => [] },
+    ] as any)
+    mockEditor.getAllEdges.mockReturnValue([{ id: 'edge1' }] as any)
+
+    const wrapper = mount(ControlPanel, {
+      props: {
+        editor: mockEditor,
+      },
+    })
+
+    // Find and click the clear canvas button
+    const clearButton = wrapper
+      .findAll('button')
+      .find(btn => btn.text().includes('清空画布'))
+    expect(clearButton).toBeDefined()
+    await clearButton!.trigger('click')
+
+    // Check if confirmation dialog is shown
+    expect(wrapper.text()).toContain('确认清空画布')
+    expect(wrapper.text()).toContain('2 个节点')
+    expect(wrapper.text()).toContain('1 条连接')
+  })
+
+  it('should not show confirmation dialog when canvas is empty', async () => {
+    mockEditor.getAllNodes.mockReturnValue([])
+    mockEditor.getAllEdges.mockReturnValue([])
+
+    const wrapper = mount(ControlPanel, {
+      props: {
+        editor: mockEditor,
+      },
+    })
+
+    // Find and click the clear canvas button
+    const clearButton = wrapper
+      .findAll('button')
+      .find(btn => btn.text().includes('清空画布'))
+    await clearButton!.trigger('click')
+
+    // Confirmation dialog should not be shown for empty canvas
+    expect(wrapper.text()).not.toContain('确认清空画布')
+    // Should show info feedback instead
+    expect(wrapper.text()).toContain('画布已经是空的')
+  })
+
+  it('should emit clear-canvas event after confirmation', async () => {
+    // Mock having nodes to clear
+    mockEditor.getAllNodes.mockReturnValue([
+      { id: 'node1', getAllPorts: () => [] },
+    ] as any)
+    mockEditor.getAllEdges.mockReturnValue([])
+
+    const wrapper = mount(ControlPanel, {
+      props: {
+        editor: mockEditor,
+      },
+    })
+
+    // Click clear canvas button to show dialog
+    const clearButton = wrapper
+      .findAll('button')
+      .find(btn => btn.text().includes('清空画布'))
+    await clearButton!.trigger('click')
+
+    // Find and click confirm button
+    const confirmButton = wrapper
+      .findAll('button')
+      .find(btn => btn.text().includes('确认清空'))
+    expect(confirmButton).toBeDefined()
+    await confirmButton!.trigger('click')
+
+    // Wait for async operations
+    await wrapper.vm.$nextTick()
+
+    // Check that clear-canvas event was emitted
+    expect(wrapper.emitted('clear-canvas')).toBeTruthy()
+  })
+
+  it('should close confirmation dialog when cancel is clicked', async () => {
+    mockEditor.getAllNodes.mockReturnValue([
+      { id: 'node1', getAllPorts: () => [] },
+    ] as any)
+    mockEditor.getAllEdges.mockReturnValue([])
+
+    const wrapper = mount(ControlPanel, {
+      props: {
+        editor: mockEditor,
+      },
+    })
+
+    // Click clear canvas button to show dialog
+    const clearButton = wrapper
+      .findAll('button')
+      .find(btn => btn.text().includes('清空画布'))
+    await clearButton!.trigger('click')
+
+    // Verify dialog is shown
+    expect(wrapper.text()).toContain('确认清空画布')
+
+    // Find and click cancel button
+    const cancelButton = wrapper
+      .findAll('button')
+      .find(btn => btn.text() === '取消')
+    expect(cancelButton).toBeDefined()
+    await cancelButton!.trigger('click')
+
+    // Dialog should be closed
+    expect(wrapper.text()).not.toContain('确认清空画布')
+  })
 })

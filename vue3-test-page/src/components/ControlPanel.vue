@@ -70,7 +70,7 @@
             :disabled="
               !editor || isLoading || props.isDragging || props.isConnecting
             "
-            @click="clearCanvas"
+            @click="showClearConfirmDialog"
           >
             <span class="btn-icon">🗑️</span>
             清空画布
@@ -84,6 +84,36 @@
                 : '清空所有节点和连接'
             }}
           </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 清空确认对话框 -->
+    <div v-if="showClearConfirm" class="import-dialog-overlay">
+      <div class="import-dialog confirm-dialog">
+        <div class="import-dialog-header">
+          <h3>确认清空画布</h3>
+          <button class="close-btn" @click="closeClearConfirmDialog">×</button>
+        </div>
+        <div class="import-dialog-body">
+          <div class="confirm-content">
+            <span class="confirm-icon">⚠️</span>
+            <p class="confirm-message">
+              确定要清空画布吗？此操作将删除所有节点和连接，并重置视图状态。
+            </p>
+            <p class="confirm-stats" v-if="clearStats">
+              当前画布包含 <strong>{{ clearStats.nodeCount }}</strong> 个节点和
+              <strong>{{ clearStats.edgeCount }}</strong> 条连接。
+            </p>
+          </div>
+        </div>
+        <div class="import-dialog-footer">
+          <button class="btn btn-secondary" @click="closeClearConfirmDialog">
+            取消
+          </button>
+          <button class="btn btn-danger" @click="confirmClearCanvas">
+            确认清空
+          </button>
         </div>
       </div>
     </div>
@@ -233,6 +263,10 @@ const customJsonInput = ref('')
 const jsonValidationError = ref('')
 const lastExportedData = ref<string | null>(null)
 const lastImportedData = ref<FlowData | null>(null)
+
+// Clear confirmation state
+const showClearConfirm = ref(false)
+const clearStats = ref<{ nodeCount: number; edgeCount: number } | null>(null)
 
 // Computed properties
 const canCreateConnection = computed(() => {
@@ -718,35 +752,77 @@ const createConnection = async () => {
   }
 }
 
-// Clear canvas
-const clearCanvas = async () => {
+// Show clear confirmation dialog
+const showClearConfirmDialog = () => {
+  if (!props.editor || props.disabled) return
+
+  // Get current counts for display in confirmation dialog
+  const nodeCount = props.editor.getAllNodes().length
+  const edgeCount = props.editor.getAllEdges().length
+
+  // If canvas is already empty, just show feedback
+  if (nodeCount === 0 && edgeCount === 0) {
+    showFeedback('info', '画布已经是空的')
+    return
+  }
+
+  clearStats.value = { nodeCount, edgeCount }
+  showClearConfirm.value = true
+}
+
+// Close clear confirmation dialog
+const closeClearConfirmDialog = () => {
+  showClearConfirm.value = false
+  clearStats.value = null
+}
+
+// Confirm and execute clear canvas
+const confirmClearCanvas = async () => {
   if (!props.editor || props.disabled) return
 
   try {
     setLoading(true, '正在清空画布...')
 
-    // Get current counts for feedback
-    const nodeCount = props.editor.getAllNodes().length
-    const edgeCount = props.editor.getAllEdges().length
+    // Close the confirmation dialog first
+    closeClearConfirmDialog()
 
-    // Clear all edges first
-    const edges = props.editor.getAllEdges()
-    for (const edge of edges) {
-      props.editor.removeEdge(edge.id)
+    // Use the editor's clear method if available, otherwise fallback to manual clearing
+    let nodeCount = 0
+    let edgeCount = 0
+
+    if (typeof props.editor.clear === 'function') {
+      // Use the new public clear method
+      const result = props.editor.clear()
+      nodeCount = result.nodeCount
+      edgeCount = result.edgeCount
+    } else {
+      // Fallback: manual clearing for backward compatibility
+      nodeCount = props.editor.getAllNodes().length
+      edgeCount = props.editor.getAllEdges().length
+
+      // Clear all edges first
+      const edges = props.editor.getAllEdges()
+      for (const edge of edges) {
+        props.editor.removeEdge(edge.id)
+      }
+
+      // Clear all nodes
+      const nodes = props.editor.getAllNodes()
+      for (const node of nodes) {
+        props.editor.removeNode(node.id)
+      }
+
+      // Reset view
+      props.editor.resetZoom()
+      props.editor.centerView()
     }
-
-    // Clear all nodes
-    const nodes = props.editor.getAllNodes()
-    for (const node of nodes) {
-      props.editor.removeNode(node.id)
-    }
-
-    // Reset view
-    props.editor.resetZoom()
-    props.editor.centerView()
 
     // Reset creation counter
     nodeCreationCount.value = 0
+
+    // Clear serialization state
+    lastExportedData.value = null
+    lastImportedData.value = null
 
     emit('clear-canvas')
     showFeedback(
@@ -764,6 +840,11 @@ const clearCanvas = async () => {
   } finally {
     setLoading(false)
   }
+}
+
+// Legacy clear canvas function (for direct calls without confirmation)
+const clearCanvas = async () => {
+  showClearConfirmDialog()
 }
 
 // Validate JSON data structure
@@ -1357,6 +1438,44 @@ watch(
   gap: 12px;
   padding: 16px 20px;
   border-top: 1px solid var(--border-color-light);
+}
+
+/* 确认对话框样式 */
+.confirm-dialog {
+  max-width: 450px;
+}
+
+.confirm-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+}
+
+.confirm-icon {
+  font-size: 48px;
+  line-height: 1;
+}
+
+.confirm-message {
+  font-size: 14px;
+  color: var(--text-color-primary);
+  margin: 0;
+  line-height: 1.6;
+}
+
+.confirm-stats {
+  font-size: 13px;
+  color: var(--text-color-secondary);
+  margin: 0;
+  padding: 8px 12px;
+  background-color: var(--bg-color-secondary);
+  border-radius: var(--border-radius);
+}
+
+.confirm-stats strong {
+  color: var(--primary-color);
 }
 
 /* 响应式设计 */

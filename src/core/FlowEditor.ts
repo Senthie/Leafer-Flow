@@ -802,7 +802,7 @@ export class FlowEditor {
     })
   }
 
-  // Helper method to clear all data
+  // Helper method to clear all data (internal use)
   private clearAll(): void {
     // Clear selection first
     this.clearSelection()
@@ -822,6 +822,44 @@ export class FlowEditor {
     // Reset viewport
     this.viewportManager.resetZoom()
     this.viewportManager.centerView()
+  }
+
+  // Public method to clear canvas with event emission
+  public clear(): { nodeCount: number; edgeCount: number } {
+    // Get counts before clearing for feedback
+    const nodeCount = this.getAllNodes().length
+    const edgeCount = this.getAllEdges().length
+
+    // Clear selection first
+    this.clearSelection()
+
+    // Remove all edges first to avoid orphaned references
+    const allEdges = this.getAllEdges()
+    for (const edge of allEdges) {
+      this.removeEdge(edge.id)
+    }
+
+    // Remove all nodes
+    const allNodes = this.getAllNodes()
+    for (const node of allNodes) {
+      this.removeNode(node.id)
+    }
+
+    // Reset viewport to initial state
+    this.viewportManager.resetZoom()
+    this.viewportManager.centerView()
+
+    // Emit clear event
+    this.eventSystem.emit('canvas:cleared', {
+      type: 'canvas:cleared',
+      timestamp: Date.now(),
+      data: {
+        nodeCount,
+        edgeCount,
+      },
+    })
+
+    return { nodeCount, edgeCount }
   }
 
   // Undo/Redo operations

@@ -58,13 +58,29 @@
           @serialization-error="onSerializationError"
         />
 
+        <!-- 状态面板组件 -->
+        <StatusPanel
+          :node-count="nodeCount"
+          :edge-count="edgeCount"
+          :viewport="currentViewport"
+          :is-connected="!!editorInstance"
+        />
+
+        <!-- 事件日志组件 -->
+        <EventLog
+          :events="eventLog"
+          :max-entries="maxEventLogEntries"
+          :max-displayed="50"
+          :show-event-data="true"
+          :auto-scroll="true"
+          @clear-log="clearEventLog"
+        />
+
+        <!-- 交互状态面板 -->
         <div class="panel">
-          <div class="panel-header">状态信息</div>
+          <div class="panel-header">交互状态</div>
           <div class="panel-body">
             <div v-if="editorInstance">
-              <p><strong>编辑器状态:</strong> {{ editorStatus }}</p>
-              <p><strong>节点数量:</strong> {{ nodeCount }}</p>
-              <p><strong>连接数量:</strong> {{ edgeCount }}</p>
               <p><strong>选中节点:</strong> {{ selectedNodeCount }}</p>
               <p><strong>选中连接:</strong> {{ selectedEdgeCount }}</p>
               <p>
@@ -74,17 +90,6 @@
                 <strong>连接状态:</strong>
                 {{ isConnecting ? '连接中' : '空闲' }}
               </p>
-              <div v-if="currentViewport">
-                <p>
-                  <strong>视图位置:</strong> ({{
-                    Math.round(currentViewport.x)
-                  }}, {{ Math.round(currentViewport.y) }})
-                </p>
-                <p>
-                  <strong>缩放级别:</strong>
-                  {{ Math.round(currentViewport.zoom * 100) }}%
-                </p>
-              </div>
             </div>
             <p v-else>等待编辑器初始化...</p>
           </div>
@@ -244,6 +249,9 @@
 import { ref, computed } from 'vue'
 import FlowEditorContainer from './components/FlowEditorContainer.vue'
 import ControlPanel from './components/ControlPanel.vue'
+import StatusPanel from './components/StatusPanel.vue'
+import EventLog from './components/EventLog.vue'
+import type { EventLogEntry } from './components/EventLog.vue'
 // import type { FlowEditor } from '../../dist'
 
 // 应用状态
@@ -261,6 +269,10 @@ const serializationStatus = ref<'idle' | 'exported' | 'imported' | 'error'>(
 )
 const serializationMessage = ref('')
 
+// 事件日志状态
+const eventLog = ref<EventLogEntry[]>([])
+const maxEventLogEntries = 100
+
 // 交互状态
 const selectedNodeCount = ref(0)
 const selectedEdgeCount = ref(0)
@@ -271,12 +283,6 @@ const isPanning = ref(false)
 const currentViewport = ref<any>(null)
 const showInteractionFeedback = ref(true)
 const lastInteractionTime = ref(Date.now())
-
-// 计算属性
-const editorStatus = computed(() => {
-  if (!editorInstance.value) return '未初始化'
-  return '已就绪'
-})
 
 // JSON统计信息
 const jsonStats = computed(() => {
@@ -316,11 +322,13 @@ const onEditorReady = (editor: any) => {
     editor.on('edge:deleted', updateCounts)
   }
 
+  addEventLog('info', '编辑器初始化成功', { editorId: editor?.id })
   console.log('编辑器已就绪:', editor)
 }
 
 const onEditorError = (error: Error) => {
   console.error('编辑器错误:', error)
+  addEventLog('error', `编辑器错误: ${error.message}`, { error: error.message })
   editorInstance.value = null
   nodeCount.value = 0
   edgeCount.value = 0
@@ -328,6 +336,7 @@ const onEditorError = (error: Error) => {
 
 const onEditorDestroyed = () => {
   console.log('编辑器已销毁')
+  addEventLog('info', '编辑器已销毁')
   editorInstance.value = null
   nodeCount.value = 0
   edgeCount.value = 0
@@ -344,16 +353,26 @@ const updateCounts = () => {
 // 控制面板事件处理
 const onNodeCreate = (type: string, node: any) => {
   console.log(`节点创建事件: ${type}`, node)
+  addEventLog('node:created', `创建了 ${type} 类型的节点`, {
+    type,
+    nodeId: node?.id,
+  })
   updateCounts()
 }
 
 const onEdgeCreate = (edge: any) => {
   console.log('连接创建事件:', edge)
+  addEventLog('edge:created', `创建了连接: ${edge?.source} → ${edge?.target}`, {
+    edgeId: edge?.id,
+    source: edge?.source,
+    target: edge?.target,
+  })
   updateCounts()
 }
 
 const onClearCanvas = () => {
   console.log('画布清空事件')
+  addEventLog('canvas:cleared', '画布已清空')
   updateCounts()
   exportedJSON.value = '' // 清空导出的JSON显示
 }
@@ -363,6 +382,18 @@ const onExportJSON = (jsonData: string) => {
   exportedJSON.value = jsonData
   serializationStatus.value = 'exported'
   serializationMessage.value = '数据导出成功'
+  try {
+    const data = JSON.parse(jsonData)
+    addEventLog(
+      'data:exported',
+      `导出了 ${data.nodes?.length || 0} 个节点和 ${
+        data.edges?.length || 0
+      } 条连接`,
+      { nodeCount: data.nodes?.length, edgeCount: data.edges?.length }
+    )
+  } catch {
+    addEventLog('data:exported', '数据导出成功')
+  }
 }
 
 const onImportJSON = (data?: any) => {
@@ -374,8 +405,16 @@ const onImportJSON = (data?: any) => {
     serializationMessage.value = `导入成功: ${
       data.nodes?.length || 0
     } 个节点, ${data.edges?.length || 0} 条连接`
+    addEventLog(
+      'data:imported',
+      `导入了 ${data.nodes?.length || 0} 个节点和 ${
+        data.edges?.length || 0
+      } 条连接`,
+      { nodeCount: data.nodes?.length, edgeCount: data.edges?.length }
+    )
   } else {
     serializationMessage.value = '数据导入成功'
+    addEventLog('data:imported', '数据导入成功')
   }
 }
 
@@ -383,27 +422,34 @@ const onSerializationError = (error: Error) => {
   console.error('序列化错误:', error)
   serializationStatus.value = 'error'
   serializationMessage.value = `错误: ${error.message}`
+  addEventLog('error', `序列化错误: ${error.message}`, { error: error.message })
 }
 
 // 交互事件处理
 const onNodeSelected = (event: any) => {
   console.log('节点选中事件:', event)
+  addEventLog('node:selected', `选中了节点`, { nodeId: event?.data?.nodeId })
   updateSelectionCounts()
 }
 
 const onNodeDeselected = (event: any) => {
   console.log('节点取消选中事件:', event)
+  addEventLog('node:deselected', `取消选中节点`, {
+    nodeId: event?.data?.nodeId,
+  })
   updateSelectionCounts()
 }
 
 const onSelectionCleared = (event: any) => {
   console.log('选择清空事件:', event)
+  addEventLog('selection:cleared', '清空了所有选择')
   selectedNodeCount.value = 0
   selectedEdgeCount.value = 0
 }
 
 const onDragStart = (event: any) => {
   console.log('拖拽开始事件:', event)
+  addEventLog('drag:start', '开始拖拽', { nodeId: event?.data?.nodeId })
   isDragging.value = true
   lastInteractionTime.value = Date.now()
 
@@ -415,12 +461,16 @@ const onDragStart = (event: any) => {
 
 const onDragMove = (event: any) => {
   console.log('拖拽移动事件:', event)
-  // 实时更新拖拽反馈
+  // 实时更新拖拽反馈（不记录日志，避免过多条目）
   lastInteractionTime.value = Date.now()
 }
 
 const onDragEnd = (event: any) => {
   console.log('拖拽结束事件:', event)
+  addEventLog('drag:end', '拖拽结束', {
+    nodeId: event?.data?.nodeId,
+    position: event?.data?.position,
+  })
   isDragging.value = false
   lastInteractionTime.value = Date.now()
   updateCounts() // 更新位置可能影响的计数
@@ -435,6 +485,7 @@ const onViewportChanged = (event: any) => {
   console.log('视图变化事件:', event)
   currentViewport.value = event.data?.viewport || null
   lastInteractionTime.value = Date.now()
+  // 视图变化事件不记录日志，避免过多条目
 
   // 临时显示缩放状态
   isZooming.value = true
@@ -445,6 +496,10 @@ const onViewportChanged = (event: any) => {
 
 const onConnectionStart = (event: any) => {
   console.log('连接开始事件:', event)
+  addEventLog('connection:start', '开始创建连接', {
+    sourceNode: event?.data?.sourceNode,
+    sourcePort: event?.data?.sourcePort,
+  })
   isConnecting.value = true
   lastInteractionTime.value = Date.now()
 
@@ -460,12 +515,14 @@ const onConnectionEnd = (event: any) => {
   lastInteractionTime.value = Date.now()
 
   if (event.data?.connectionCreated) {
+    addEventLog('connection:end', '连接创建成功', { connectionCreated: true })
     updateCounts() // 如果创建了连接，更新计数
     // 提供成功反馈
     if (navigator.vibrate) {
       navigator.vibrate([100, 50, 100])
     }
   } else {
+    addEventLog('connection:end', '连接创建取消', { connectionCreated: false })
     // 提供失败反馈
     if (navigator.vibrate) {
       navigator.vibrate([200, 100, 200])
@@ -546,6 +603,34 @@ const clearSelection = () => {
     selectedNodeCount.value = 0
     selectedEdgeCount.value = 0
   }
+}
+
+// 事件日志工具函数
+const generateEventId = (): string => {
+  return `event-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+}
+
+const addEventLog = (type: string, message: string, data?: any) => {
+  const entry: EventLogEntry = {
+    id: generateEventId(),
+    timestamp: new Date(),
+    type,
+    data: data || null,
+    message,
+  }
+
+  // 添加到日志开头（最新的在前面）
+  eventLog.value.unshift(entry)
+
+  // 限制日志条目数量
+  if (eventLog.value.length > maxEventLogEntries) {
+    eventLog.value = eventLog.value.slice(0, maxEventLogEntries)
+  }
+}
+
+const clearEventLog = () => {
+  eventLog.value = []
+  addEventLog('info', '事件日志已清空')
 }
 
 // 初始化日志

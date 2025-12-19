@@ -38,13 +38,25 @@
         <div class="button-group">
           <button
             class="btn btn-secondary"
-            :disabled="!editor || isLoading || !canCreateConnection"
+            :disabled="
+              !editor ||
+              isLoading ||
+              !canCreateConnection ||
+              props.isDragging ||
+              props.isConnecting
+            "
             @click="createConnection"
           >
             <span class="btn-icon">🔗</span>
-            创建连接
+            {{ props.isConnecting ? '连接中...' : '创建连接' }}
           </button>
-          <p class="help-text">需要至少两个兼容的节点才能创建连接</p>
+          <p class="help-text">
+            {{
+              props.isConnecting
+                ? '正在创建连接，请选择目标端口'
+                : '需要至少两个兼容的节点才能创建连接'
+            }}
+          </p>
         </div>
       </div>
     </div>
@@ -55,12 +67,23 @@
         <div class="button-group">
           <button
             class="btn btn-danger"
-            :disabled="!editor || isLoading"
+            :disabled="
+              !editor || isLoading || props.isDragging || props.isConnecting
+            "
             @click="clearCanvas"
           >
             <span class="btn-icon">🗑️</span>
             清空画布
           </button>
+          <p class="help-text">
+            {{
+              props.isDragging
+                ? '拖拽进行中，请等待完成'
+                : props.isConnecting
+                ? '连接进行中，请等待完成'
+                : '清空所有节点和连接'
+            }}
+          </p>
         </div>
       </div>
     </div>
@@ -121,6 +144,10 @@ import type { NodeData, EdgeData } from '../../../src/types'
 interface Props {
   editor: any | null
   disabled?: boolean
+  isDragging?: boolean
+  isConnecting?: boolean
+  selectedNodeCount?: number
+  selectedEdgeCount?: number
 }
 
 // Emits interface
@@ -135,6 +162,10 @@ interface Emits {
 // Props with defaults
 const props = withDefaults(defineProps<Props>(), {
   disabled: false,
+  isDragging: false,
+  isConnecting: false,
+  selectedNodeCount: 0,
+  selectedEdgeCount: 0,
 })
 
 // Emits

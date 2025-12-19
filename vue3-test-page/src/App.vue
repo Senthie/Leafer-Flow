@@ -17,12 +17,15 @@
       </div>
 
       <aside class="control-panel">
-        <div class="panel">
-          <div class="panel-header">控制面板</div>
-          <div class="panel-body">
-            <p>控制按钮将在此处添加</p>
-          </div>
-        </div>
+        <!-- 控制面板组件 -->
+        <ControlPanel
+          :editor="editorInstance"
+          @node-create="onNodeCreate"
+          @edge-create="onEdgeCreate"
+          @clear-canvas="onClearCanvas"
+          @export-json="onExportJSON"
+          @import-json="onImportJSON"
+        />
 
         <div class="panel">
           <div class="panel-header">状态信息</div>
@@ -60,6 +63,19 @@
             </div>
           </div>
         </div>
+
+        <!-- JSON 数据显示区域 -->
+        <div v-if="exportedJSON" class="panel">
+          <div class="panel-header">导出的JSON数据</div>
+          <div class="panel-body">
+            <textarea
+              v-model="exportedJSON"
+              readonly
+              class="json-display"
+              rows="10"
+            ></textarea>
+          </div>
+        </div>
       </aside>
     </main>
   </div>
@@ -68,6 +84,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import FlowEditorContainer from './components/FlowEditorContainer.vue'
+import ControlPanel from './components/ControlPanel.vue'
 // import type { FlowEditor } from '../../dist'
 
 // 应用状态
@@ -76,6 +93,7 @@ const nodeCount = ref(0)
 const edgeCount = ref(0)
 const editorBackground = ref('#ffffff')
 const showGrid = ref(true)
+const exportedJSON = ref('')
 
 // 计算属性
 const editorStatus = computed(() => {
@@ -117,6 +135,34 @@ const updateCounts = () => {
     nodeCount.value = editorInstance.value.getAllNodes().length
     edgeCount.value = editorInstance.value.getAllEdges().length
   }
+}
+
+// 控制面板事件处理
+const onNodeCreate = (type: string, node: any) => {
+  console.log(`节点创建事件: ${type}`, node)
+  updateCounts()
+}
+
+const onEdgeCreate = (edge: any) => {
+  console.log('连接创建事件:', edge)
+  updateCounts()
+}
+
+const onClearCanvas = () => {
+  console.log('画布清空事件')
+  updateCounts()
+  exportedJSON.value = '' // 清空导出的JSON显示
+}
+
+const onExportJSON = (jsonData: string) => {
+  console.log('JSON导出事件:', jsonData)
+  exportedJSON.value = jsonData
+}
+
+const onImportJSON = () => {
+  console.log('JSON导入事件')
+  updateCounts()
+  exportedJSON.value = '' // 清空之前的导出数据显示
 }
 
 // 初始化日志
@@ -179,6 +225,18 @@ console.log('Vue3测试页面已加载')
   margin-bottom: 0;
 }
 
+.json-display {
+  width: 100%;
+  padding: 12px;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  background-color: #f5f5f5;
+  border: 1px solid var(--border-color-light);
+  border-radius: var(--border-radius);
+  resize: vertical;
+  line-height: 1.5;
+}
+
 /* 响应式设计 */
 @media (max-width: 768px) {
   .app-main {
@@ -196,6 +254,10 @@ console.log('Vue3测试页面已加载')
 
   .app-header h1 {
     font-size: 20px;
+  }
+
+  .json-display {
+    font-size: 11px;
   }
 }
 </style>

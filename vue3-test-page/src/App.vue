@@ -1,252 +1,291 @@
 <template>
-  <div class="app">
-    <header class="app-header">
-      <h1>Leafer-Flow Vue3 测试页面</h1>
-      <p>用于验证和展示工作流编辑器的各项功能</p>
-    </header>
-
-    <main class="app-main">
-      <div class="editor-container">
-        <FlowEditorContainer
-          ref="editorContainerRef"
-          :background="editorBackground"
-          :show-grid="showGrid"
-          @editor-ready="onEditorReady"
-          @editor-error="onEditorError"
-          @editor-destroyed="onEditorDestroyed"
-          @node-selected="onNodeSelected"
-          @node-deselected="onNodeDeselected"
-          @selection-cleared="onSelectionCleared"
-          @drag-start="onDragStart"
-          @drag-move="onDragMove"
-          @drag-end="onDragEnd"
-          @viewport-changed="onViewportChanged"
-          @connection-start="onConnectionStart"
-          @connection-end="onConnectionEnd"
-        />
-
-        <!-- Interactive feedback overlay -->
-        <div v-if="showInteractionFeedback" class="interaction-feedback">
-          <div class="feedback-item" v-if="isDragging">
-            <span class="feedback-icon">🖱️</span>
-            <span>拖拽中...</span>
-          </div>
-          <div class="feedback-item" v-if="isConnecting">
-            <span class="feedback-icon">🔗</span>
-            <span>连接中...</span>
-          </div>
-          <div class="feedback-item" v-if="isZooming">
-            <span class="feedback-icon">🔍</span>
-            <span>缩放中...</span>
-          </div>
+  <div class="app" :class="{ 'has-error': hasGlobalError }">
+    <!-- 全局错误边界 -->
+    <div v-if="hasGlobalError" class="global-error-boundary">
+      <div class="error-content">
+        <span class="error-icon">⚠️</span>
+        <h2>应用发生错误</h2>
+        <p class="error-message">{{ globalErrorMessage }}</p>
+        <div class="error-actions">
+          <button class="btn btn-primary" @click="recoverFromError">
+            🔄 尝试恢复
+          </button>
+          <button class="btn btn-secondary" @click="reloadPage">
+            🔃 刷新页面
+          </button>
         </div>
       </div>
+    </div>
 
-      <aside class="control-panel">
-        <!-- 控制面板组件 -->
-        <ControlPanel
-          :editor="editorInstance"
-          :is-dragging="isDragging"
-          :is-connecting="isConnecting"
-          :selected-node-count="selectedNodeCount"
-          :selected-edge-count="selectedEdgeCount"
-          @node-create="onNodeCreate"
-          @edge-create="onEdgeCreate"
-          @clear-canvas="onClearCanvas"
-          @export-json="onExportJSON"
-          @import-json="onImportJSON"
-          @serialization-error="onSerializationError"
-        />
+    <!-- 主应用内容 -->
+    <template v-else>
+      <header class="app-header">
+        <div class="header-content">
+          <h1>Leafer-Flow Vue3 测试页面</h1>
+          <p class="header-description">用于验证和展示工作流编辑器的各项功能</p>
+        </div>
+        <div class="header-status">
+          <span class="status-indicator" :class="editorStatusClass">
+            {{ editorStatusText }}
+          </span>
+        </div>
+      </header>
 
-        <!-- 状态面板组件 -->
-        <StatusPanel
-          :node-count="nodeCount"
-          :edge-count="edgeCount"
-          :viewport="currentViewport"
-          :is-connected="!!editorInstance"
-        />
+      <main class="app-main">
+        <div
+          class="editor-container"
+          :class="{
+            'has-selection': selectedNodeCount > 0 || selectedEdgeCount > 0,
+          }"
+        >
+          <FlowEditorContainer
+            ref="editorContainerRef"
+            :background="editorBackground"
+            :show-grid="showGrid"
+            @editor-ready="onEditorReady"
+            @editor-error="onEditorError"
+            @editor-destroyed="onEditorDestroyed"
+            @node-selected="onNodeSelected"
+            @node-deselected="onNodeDeselected"
+            @selection-cleared="onSelectionCleared"
+            @drag-start="onDragStart"
+            @drag-move="onDragMove"
+            @drag-end="onDragEnd"
+            @viewport-changed="onViewportChanged"
+            @connection-start="onConnectionStart"
+            @connection-end="onConnectionEnd"
+          />
 
-        <!-- 事件日志组件 -->
-        <EventLog
-          :events="eventLog"
-          :max-entries="maxEventLogEntries"
-          :max-displayed="50"
-          :show-event-data="true"
-          :auto-scroll="true"
-          @clear-log="clearEventLog"
-        />
+          <!-- Interactive feedback overlay -->
+          <div v-if="showInteractionFeedback" class="interaction-feedback">
+            <div class="feedback-item" v-if="isDragging">
+              <span class="feedback-icon">🖱️</span>
+              <span>拖拽中...</span>
+            </div>
+            <div class="feedback-item" v-if="isConnecting">
+              <span class="feedback-icon">🔗</span>
+              <span>连接中...</span>
+            </div>
+            <div class="feedback-item" v-if="isZooming">
+              <span class="feedback-icon">🔍</span>
+              <span>缩放中...</span>
+            </div>
+          </div>
+        </div>
 
-        <!-- 交互状态面板 -->
-        <div class="panel">
-          <div class="panel-header">交互状态</div>
-          <div class="panel-body">
-            <div v-if="editorInstance">
-              <p><strong>选中节点:</strong> {{ selectedNodeCount }}</p>
-              <p><strong>选中连接:</strong> {{ selectedEdgeCount }}</p>
-              <p>
-                <strong>拖拽状态:</strong> {{ isDragging ? '拖拽中' : '空闲' }}
+        <aside class="control-panel">
+          <!-- 控制面板组件 -->
+          <ControlPanel
+            :editor="editorInstance"
+            :is-dragging="isDragging"
+            :is-connecting="isConnecting"
+            :selected-node-count="selectedNodeCount"
+            :selected-edge-count="selectedEdgeCount"
+            @node-create="onNodeCreate"
+            @edge-create="onEdgeCreate"
+            @clear-canvas="onClearCanvas"
+            @export-json="onExportJSON"
+            @import-json="onImportJSON"
+            @serialization-error="onSerializationError"
+          />
+
+          <!-- 状态面板组件 -->
+          <StatusPanel
+            :node-count="nodeCount"
+            :edge-count="edgeCount"
+            :viewport="currentViewport"
+            :is-connected="!!editorInstance"
+          />
+
+          <!-- 事件日志组件 -->
+          <EventLog
+            :events="eventLog"
+            :max-entries="maxEventLogEntries"
+            :max-displayed="50"
+            :show-event-data="true"
+            :auto-scroll="true"
+            @clear-log="clearEventLog"
+          />
+
+          <!-- 交互状态面板 -->
+          <div class="panel">
+            <div class="panel-header">交互状态</div>
+            <div class="panel-body">
+              <div v-if="editorInstance">
+                <p><strong>选中节点:</strong> {{ selectedNodeCount }}</p>
+                <p><strong>选中连接:</strong> {{ selectedEdgeCount }}</p>
+                <p>
+                  <strong>拖拽状态:</strong>
+                  {{ isDragging ? '拖拽中' : '空闲' }}
+                </p>
+                <p>
+                  <strong>连接状态:</strong>
+                  {{ isConnecting ? '连接中' : '空闲' }}
+                </p>
+              </div>
+              <p v-else>等待编辑器初始化...</p>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">视图控制</div>
+            <div class="panel-body">
+              <div class="button-group">
+                <button
+                  class="btn btn-secondary"
+                  :disabled="!editorInstance"
+                  @click="zoomIn"
+                  title="放大视图"
+                >
+                  🔍+ 放大
+                </button>
+                <button
+                  class="btn btn-secondary"
+                  :disabled="!editorInstance"
+                  @click="zoomOut"
+                  title="缩小视图"
+                >
+                  🔍- 缩小
+                </button>
+                <button
+                  class="btn btn-secondary"
+                  :disabled="!editorInstance"
+                  @click="resetZoom"
+                  title="重置缩放"
+                >
+                  🎯 重置缩放
+                </button>
+                <button
+                  class="btn btn-secondary"
+                  :disabled="!editorInstance"
+                  @click="centerView"
+                  title="居中视图"
+                >
+                  🏠 居中视图
+                </button>
+                <button
+                  class="btn btn-secondary"
+                  :disabled="!editorInstance"
+                  @click="fitView"
+                  title="适应视图"
+                >
+                  📐 适应视图
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">选择控制</div>
+            <div class="panel-body">
+              <div class="button-group">
+                <button
+                  class="btn btn-warning"
+                  :disabled="
+                    !editorInstance ||
+                    (selectedNodeCount === 0 && selectedEdgeCount === 0)
+                  "
+                  @click="clearSelection"
+                  title="清空选择"
+                >
+                  ❌ 清空选择
+                </button>
+              </div>
+              <p class="help-text">
+                提示：点击节点选择，Ctrl+点击多选，点击空白区域取消选择，拖拽移动节点
               </p>
-              <p>
-                <strong>连接状态:</strong>
-                {{ isConnecting ? '连接中' : '空闲' }}
-              </p>
-            </div>
-            <p v-else>等待编辑器初始化...</p>
-          </div>
-        </div>
-
-        <div class="panel">
-          <div class="panel-header">视图控制</div>
-          <div class="panel-body">
-            <div class="button-group">
-              <button
-                class="btn btn-secondary"
-                :disabled="!editorInstance"
-                @click="zoomIn"
-                title="放大视图"
-              >
-                🔍+ 放大
-              </button>
-              <button
-                class="btn btn-secondary"
-                :disabled="!editorInstance"
-                @click="zoomOut"
-                title="缩小视图"
-              >
-                🔍- 缩小
-              </button>
-              <button
-                class="btn btn-secondary"
-                :disabled="!editorInstance"
-                @click="resetZoom"
-                title="重置缩放"
-              >
-                🎯 重置缩放
-              </button>
-              <button
-                class="btn btn-secondary"
-                :disabled="!editorInstance"
-                @click="centerView"
-                title="居中视图"
-              >
-                🏠 居中视图
-              </button>
-              <button
-                class="btn btn-secondary"
-                :disabled="!editorInstance"
-                @click="fitView"
-                title="适应视图"
-              >
-                📐 适应视图
-              </button>
             </div>
           </div>
-        </div>
 
-        <div class="panel">
-          <div class="panel-header">选择控制</div>
-          <div class="panel-body">
-            <div class="button-group">
-              <button
-                class="btn btn-warning"
-                :disabled="
-                  !editorInstance ||
-                  (selectedNodeCount === 0 && selectedEdgeCount === 0)
-                "
-                @click="clearSelection"
-                title="清空选择"
-              >
-                ❌ 清空选择
-              </button>
-            </div>
-            <p class="help-text">
-              提示：点击节点选择，Ctrl+点击多选，点击空白区域取消选择，拖拽移动节点
-            </p>
-          </div>
-        </div>
-
-        <div class="panel">
-          <div class="panel-header">编辑器配置</div>
-          <div class="panel-body">
-            <div class="form-group">
-              <label class="form-label">
+          <div class="panel">
+            <div class="panel-header">编辑器配置</div>
+            <div class="panel-body">
+              <div class="form-group">
+                <label class="form-label">
+                  <input
+                    type="checkbox"
+                    v-model="showGrid"
+                    style="margin-right: 8px"
+                  />
+                  显示网格
+                </label>
+              </div>
+              <div class="form-group">
+                <label class="form-label">背景颜色:</label>
                 <input
-                  type="checkbox"
-                  v-model="showGrid"
-                  style="margin-right: 8px"
+                  type="color"
+                  v-model="editorBackground"
+                  class="form-input"
+                  style="height: 32px"
                 />
-                显示网格
-              </label>
-            </div>
-            <div class="form-group">
-              <label class="form-label">背景颜色:</label>
-              <input
-                type="color"
-                v-model="editorBackground"
-                class="form-input"
-                style="height: 32px"
-              />
+              </div>
             </div>
           </div>
-        </div>
 
-        <!-- 序列化状态显示 -->
-        <div v-if="serializationStatus !== 'idle'" class="panel">
-          <div class="panel-header">
-            序列化状态
-            <span
-              class="status-badge"
-              :class="{
-                'status-success':
-                  serializationStatus === 'exported' ||
-                  serializationStatus === 'imported',
-                'status-error': serializationStatus === 'error',
-              }"
-            >
-              {{
-                serializationStatus === 'exported'
-                  ? '已导出'
-                  : serializationStatus === 'imported'
-                  ? '已导入'
-                  : '错误'
-              }}
-            </span>
-          </div>
-          <div class="panel-body">
-            <p class="serialization-message">{{ serializationMessage }}</p>
-          </div>
-        </div>
-
-        <!-- JSON 数据显示区域 -->
-        <div v-if="exportedJSON" class="panel">
-          <div class="panel-header">
-            导出的JSON数据
-            <button class="copy-btn" @click="copyJSON" title="复制到剪贴板">
-              📋
-            </button>
-          </div>
-          <div class="panel-body">
-            <textarea
-              v-model="exportedJSON"
-              readonly
-              class="json-display"
-              rows="10"
-            ></textarea>
-            <div class="json-stats">
-              <span v-if="jsonStats">
-                {{ jsonStats.nodeCount }} 个节点 |
-                {{ jsonStats.edgeCount }} 条连接
+          <!-- 序列化状态显示 -->
+          <div v-if="serializationStatus !== 'idle'" class="panel">
+            <div class="panel-header">
+              序列化状态
+              <span
+                class="status-badge"
+                :class="{
+                  'status-success':
+                    serializationStatus === 'exported' ||
+                    serializationStatus === 'imported',
+                  'status-error': serializationStatus === 'error',
+                }"
+              >
+                {{
+                  serializationStatus === 'exported'
+                    ? '已导出'
+                    : serializationStatus === 'imported'
+                    ? '已导入'
+                    : '错误'
+                }}
               </span>
             </div>
+            <div class="panel-body">
+              <p class="serialization-message">{{ serializationMessage }}</p>
+            </div>
           </div>
-        </div>
-      </aside>
-    </main>
+
+          <!-- JSON 数据显示区域 -->
+          <div v-if="exportedJSON" class="panel">
+            <div class="panel-header">
+              导出的JSON数据
+              <button class="copy-btn" @click="copyJSON" title="复制到剪贴板">
+                📋
+              </button>
+            </div>
+            <div class="panel-body">
+              <textarea
+                v-model="exportedJSON"
+                readonly
+                class="json-display"
+                rows="10"
+              ></textarea>
+              <div class="json-stats">
+                <span v-if="jsonStats">
+                  {{ jsonStats.nodeCount }} 个节点 |
+                  {{ jsonStats.edgeCount }} 条连接
+                </span>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </main>
+
+      <!-- 全局加载指示器 -->
+      <div v-if="isGlobalLoading" class="global-loading-overlay">
+        <div class="loading-spinner"></div>
+        <p>{{ globalLoadingMessage }}</p>
+      </div>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted, onErrorCaptured } from 'vue'
 import FlowEditorContainer from './components/FlowEditorContainer.vue'
 import ControlPanel from './components/ControlPanel.vue'
 import StatusPanel from './components/StatusPanel.vue'
@@ -254,7 +293,89 @@ import EventLog from './components/EventLog.vue'
 import type { EventLogEntry } from './components/EventLog.vue'
 // import type { FlowEditor } from '../../dist'
 
-// 应用状态
+// ==================== 全局错误处理状态 ====================
+const hasGlobalError = ref(false)
+const globalErrorMessage = ref('')
+const isGlobalLoading = ref(false)
+const globalLoadingMessage = ref('')
+
+// 全局错误处理函数
+const handleGlobalError = (error: Error, source: string = '未知来源') => {
+  console.error(`[全局错误] ${source}:`, error)
+  hasGlobalError.value = true
+  globalErrorMessage.value = `${source}: ${error.message}`
+  addEventLog('error', `全局错误: ${error.message}`, {
+    source,
+    error: error.message,
+  })
+}
+
+// 从错误中恢复
+const recoverFromError = () => {
+  hasGlobalError.value = false
+  globalErrorMessage.value = ''
+  // 尝试重新初始化编辑器
+  if (editorContainerRef.value) {
+    editorContainerRef.value.retryInitialization()
+  }
+  addEventLog('info', '尝试从错误中恢复')
+}
+
+// 刷新页面
+const reloadPage = () => {
+  window.location.reload()
+}
+
+// 设置全局加载状态
+const setGlobalLoading = (loading: boolean, message: string = '') => {
+  isGlobalLoading.value = loading
+  globalLoadingMessage.value = message
+}
+
+// Vue错误边界 - 捕获子组件错误
+onErrorCaptured((error: Error, _instance, info) => {
+  console.error('[Vue错误边界] 捕获到错误:', error, info)
+  handleGlobalError(error, `组件错误 (${info})`)
+  // 返回false阻止错误继续传播
+  return false
+})
+
+// 全局未捕获错误处理
+const globalErrorHandler = (event: ErrorEvent) => {
+  console.error('[全局错误处理器] 未捕获错误:', event.error)
+  handleGlobalError(
+    event.error || new Error(event.message),
+    '未捕获的JavaScript错误'
+  )
+  event.preventDefault()
+}
+
+// 全局Promise拒绝处理
+const globalRejectionHandler = (event: PromiseRejectionEvent) => {
+  console.error('[全局错误处理器] 未处理的Promise拒绝:', event.reason)
+  const error =
+    event.reason instanceof Error
+      ? event.reason
+      : new Error(String(event.reason))
+  handleGlobalError(error, '未处理的Promise拒绝')
+  event.preventDefault()
+}
+
+// 注册全局错误处理器
+onMounted(() => {
+  window.addEventListener('error', globalErrorHandler)
+  window.addEventListener('unhandledrejection', globalRejectionHandler)
+  console.log('Vue3测试页面已加载，全局错误处理器已注册')
+  addEventLog('info', '应用初始化完成')
+})
+
+// 清理全局错误处理器
+onUnmounted(() => {
+  window.removeEventListener('error', globalErrorHandler)
+  window.removeEventListener('unhandledrejection', globalRejectionHandler)
+})
+
+// ==================== 应用状态 ====================
 const editorInstance = ref<any>(null)
 const editorContainerRef = ref<any>(null)
 const nodeCount = ref(0)
@@ -283,6 +404,19 @@ const isPanning = ref(false)
 const currentViewport = ref<any>(null)
 const showInteractionFeedback = ref(true)
 const lastInteractionTime = ref(Date.now())
+
+// ==================== 编辑器状态计算属性 ====================
+const editorStatusClass = computed(() => ({
+  'status-ready': !!editorInstance.value,
+  'status-loading': !editorInstance.value && !hasGlobalError.value,
+  'status-error': hasGlobalError.value,
+}))
+
+const editorStatusText = computed(() => {
+  if (hasGlobalError.value) return '❌ 错误'
+  if (editorInstance.value) return '✅ 已就绪'
+  return '⏳ 初始化中...'
+})
 
 // JSON统计信息
 const jsonStats = computed(() => {
@@ -632,9 +766,6 @@ const clearEventLog = () => {
   eventLog.value = []
   addEventLog('info', '事件日志已清空')
 }
-
-// 初始化日志
-console.log('Vue3测试页面已加载')
 </script>
 
 <style scoped>
@@ -643,26 +774,170 @@ console.log('Vue3测试页面已加载')
   flex-direction: column;
   height: 100vh;
   background-color: var(--bg-color-page);
+  position: relative;
 }
 
-.app-header {
-  background-color: var(--bg-color);
-  border-bottom: 1px solid var(--border-color-light);
-  padding: 20px;
+.app.has-error {
+  overflow: hidden;
+}
+
+/* ==================== 全局错误边界样式 ==================== */
+.global-error-boundary {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(255, 255, 255, 0.98);
+  z-index: 9999;
+  animation: fadeIn 0.3s ease;
+}
+
+.global-error-boundary .error-content {
   text-align: center;
-  box-shadow: var(--box-shadow);
+  padding: 48px;
+  max-width: 500px;
+  background-color: var(--bg-color);
+  border-radius: var(--border-radius);
+  box-shadow: var(--box-shadow-light);
+  border: 1px solid var(--danger-color);
 }
 
-.app-header h1 {
-  color: var(--text-color-primary);
-  margin-bottom: 8px;
+.global-error-boundary .error-icon {
+  font-size: 64px;
+  display: block;
+  margin-bottom: 16px;
+}
+
+.global-error-boundary h2 {
+  color: var(--danger-color);
+  margin-bottom: 12px;
   font-size: 24px;
   font-weight: 600;
 }
 
-.app-header p {
+.global-error-boundary .error-message {
+  color: var(--text-color-secondary);
+  margin-bottom: 24px;
+  font-size: 14px;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.global-error-boundary .error-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+/* ==================== 全局加载指示器样式 ==================== */
+.global-loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(255, 255, 255, 0.9);
+  z-index: 9998;
+  animation: fadeIn 0.2s ease;
+}
+
+.global-loading-overlay .loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid var(--border-color-light);
+  border-top: 4px solid var(--primary-color);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+.global-loading-overlay p {
   color: var(--text-color-secondary);
   font-size: 14px;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* ==================== 头部样式 ==================== */
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: var(--bg-color);
+  border-bottom: 1px solid var(--border-color-light);
+  padding: 16px 24px;
+  box-shadow: var(--box-shadow);
+}
+
+.header-content {
+  flex: 1;
+}
+
+.app-header h1 {
+  color: var(--text-color-primary);
+  margin-bottom: 4px;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.header-description {
+  color: var(--text-color-secondary);
+  font-size: 13px;
+  margin: 0;
+}
+
+.header-status {
+  display: flex;
+  align-items: center;
+}
+
+.status-indicator {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: var(--border-radius-round);
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.status-indicator.status-ready {
+  background-color: var(--success-bg);
+  color: var(--success-color);
+}
+
+.status-indicator.status-loading {
+  background-color: var(--info-bg);
+  color: var(--info-color);
+}
+
+.status-indicator.status-error {
+  background-color: var(--danger-bg);
+  color: var(--danger-color);
 }
 
 .app-main {
@@ -918,23 +1193,55 @@ console.log('Vue3测试页面已加载')
   }
 }
 
-/* 响应式设计 */
+/* ==================== 响应式设计 ==================== */
+@media (max-width: 1024px) {
+  .app-header {
+    padding: 12px 16px;
+  }
+
+  .app-header h1 {
+    font-size: 18px;
+  }
+
+  .header-description {
+    font-size: 12px;
+  }
+
+  .control-panel {
+    width: 280px;
+  }
+}
+
 @media (max-width: 768px) {
   .app-main {
     flex-direction: column;
   }
 
-  .control-panel {
-    width: 100%;
-    max-height: 300px;
-  }
-
   .app-header {
+    flex-direction: column;
+    text-align: center;
+    gap: 12px;
     padding: 16px;
   }
 
+  .header-content {
+    text-align: center;
+  }
+
   .app-header h1 {
-    font-size: 20px;
+    font-size: 18px;
+  }
+
+  .control-panel {
+    width: 100%;
+    max-height: 50vh;
+    border-right: none;
+    border-top: 1px solid var(--border-color-light);
+  }
+
+  .editor-container {
+    min-height: 300px;
+    flex: 1;
   }
 
   .json-display {
@@ -949,6 +1256,47 @@ console.log('Vue3测试页面已加载')
   .feedback-item {
     padding: 6px 10px;
     font-size: 11px;
+  }
+
+  .global-error-boundary .error-content {
+    padding: 24px;
+    margin: 16px;
+  }
+
+  .global-error-boundary h2 {
+    font-size: 20px;
+  }
+
+  .global-error-boundary .error-icon {
+    font-size: 48px;
+  }
+
+  .global-error-boundary .error-actions {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-header h1 {
+    font-size: 16px;
+  }
+
+  .header-description {
+    font-size: 11px;
+  }
+
+  .status-indicator {
+    font-size: 11px;
+    padding: 4px 8px;
+  }
+
+  .editor-container {
+    min-height: 250px;
+    padding: 8px;
+  }
+
+  .control-panel {
+    padding: 12px;
   }
 }
 </style>

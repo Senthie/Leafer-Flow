@@ -68,7 +68,8 @@ describe('ControlPanel', () => {
     })
 
     expect(wrapper.text()).toContain('导出JSON')
-    expect(wrapper.text()).toContain('导入JSON')
+    expect(wrapper.text()).toContain('导入预定义数据')
+    expect(wrapper.text()).toContain('导入自定义JSON')
   })
 
   it('should disable buttons when no editor is provided', () => {

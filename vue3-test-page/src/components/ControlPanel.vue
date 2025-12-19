@@ -106,7 +106,51 @@
             @click="importJSON"
           >
             <span class="btn-icon">📥</span>
-            导入JSON
+            导入预定义数据
+          </button>
+          <button
+            class="btn btn-info"
+            :disabled="!editor || isLoading"
+            @click="showImportDialog"
+          >
+            <span class="btn-icon">📋</span>
+            导入自定义JSON
+          </button>
+        </div>
+        <p class="help-text">
+          {{ serializationStatus }}
+        </p>
+      </div>
+    </div>
+
+    <!-- 自定义JSON导入对话框 -->
+    <div v-if="showCustomImportDialog" class="import-dialog-overlay">
+      <div class="import-dialog">
+        <div class="import-dialog-header">
+          <h3>导入自定义JSON数据</h3>
+          <button class="close-btn" @click="closeImportDialog">×</button>
+        </div>
+        <div class="import-dialog-body">
+          <textarea
+            v-model="customJsonInput"
+            class="json-input"
+            placeholder="请粘贴JSON数据..."
+            rows="10"
+          ></textarea>
+          <div v-if="jsonValidationError" class="validation-error">
+            {{ jsonValidationError }}
+          </div>
+        </div>
+        <div class="import-dialog-footer">
+          <button class="btn btn-secondary" @click="closeImportDialog">
+            取消
+          </button>
+          <button
+            class="btn btn-primary"
+            :disabled="!customJsonInput || !!jsonValidationError"
+            @click="importCustomJSON"
+          >
+            导入
           </button>
         </div>
       </div>
@@ -138,7 +182,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import type { NodeData, EdgeData } from '../../../src/types'
+import type { NodeData, EdgeData, FlowData } from '../../../src/types'
 
 // Props interface
 interface Props {
@@ -156,7 +200,8 @@ interface Emits {
   (e: 'edge-create', edge: any): void
   (e: 'clear-canvas'): void
   (e: 'export-json', data: string): void
-  (e: 'import-json'): void
+  (e: 'import-json', data?: FlowData): void
+  (e: 'serialization-error', error: Error): void
 }
 
 // Props with defaults
@@ -182,12 +227,39 @@ const feedback = ref<{
 // Node creation counter for unique positioning
 const nodeCreationCount = ref(0)
 
+// Serialization state
+const showCustomImportDialog = ref(false)
+const customJsonInput = ref('')
+const jsonValidationError = ref('')
+const lastExportedData = ref<string | null>(null)
+const lastImportedData = ref<FlowData | null>(null)
+
 // Computed properties
 const canCreateConnection = computed(() => {
   if (!props.editor) return false
 
   const nodes = props.editor.getAllNodes()
   return nodes.length >= 2
+})
+
+// Serialization status message
+const serializationStatus = computed(() => {
+  if (lastExportedData.value) {
+    try {
+      const data = JSON.parse(lastExportedData.value)
+      return `已导出: ${data.nodes?.length || 0} 个节点, ${
+        data.edges?.length || 0
+      } 条连接`
+    } catch {
+      return '导出数据可用'
+    }
+  }
+  if (lastImportedData.value) {
+    return `已导入: ${lastImportedData.value.nodes?.length || 0} 个节点, ${
+      lastImportedData.value.edges?.length || 0
+    } 条连接`
+  }
+  return '支持导出/导入工作流数据'
 })
 
 // Predefined node templates
@@ -245,75 +317,214 @@ const NODE_TEMPLATES = {
   },
 }
 
-// Predefined test scenario for import
-const TEST_SCENARIO = {
-  nodes: [
-    {
-      id: 'start-1',
-      type: 'start',
-      position: { x: 100, y: 150 },
-      data: { label: '开始', description: '工作流开始节点' },
-      ports: [
-        {
-          id: 'output',
-          type: 'output' as const,
-          position: 'right' as const,
-          dataType: 'any',
-        },
-      ],
+// Predefined test scenarios for import
+const TEST_SCENARIOS: Record<string, FlowData> = {
+  basic: {
+    nodes: [
+      {
+        id: 'start-1',
+        type: 'start',
+        position: { x: 100, y: 150 },
+        data: { label: '开始', description: '工作流开始节点' },
+        ports: [
+          {
+            id: 'output',
+            type: 'output' as const,
+            position: 'right' as const,
+            dataType: 'any',
+          },
+        ],
+      },
+      {
+        id: 'process-1',
+        type: 'process',
+        position: { x: 300, y: 150 },
+        data: { label: '处理', description: '数据处理节点' },
+        ports: [
+          {
+            id: 'input',
+            type: 'input' as const,
+            position: 'left' as const,
+            dataType: 'any',
+          },
+          {
+            id: 'output',
+            type: 'output' as const,
+            position: 'right' as const,
+            dataType: 'processed',
+          },
+        ],
+      },
+      {
+        id: 'end-1',
+        type: 'end',
+        position: { x: 500, y: 150 },
+        data: { label: '结束', description: '工作流结束节点' },
+        ports: [
+          {
+            id: 'input',
+            type: 'input' as const,
+            position: 'left' as const,
+            dataType: 'processed',
+          },
+        ],
+      },
+    ],
+    edges: [
+      {
+        id: 'edge-1',
+        source: 'start-1',
+        sourcePort: 'output',
+        target: 'process-1',
+        targetPort: 'input',
+      },
+      {
+        id: 'edge-2',
+        source: 'process-1',
+        sourcePort: 'output',
+        target: 'end-1',
+        targetPort: 'input',
+      },
+    ],
+    viewport: { x: 0, y: 0, zoom: 1 },
+    metadata: {
+      version: '1.0.0',
+      created: new Date().toISOString(),
+      modified: new Date().toISOString(),
     },
-    {
-      id: 'process-1',
-      type: 'process',
-      position: { x: 300, y: 150 },
-      data: { label: '处理', description: '数据处理节点' },
-      ports: [
-        {
-          id: 'input',
-          type: 'input' as const,
-          position: 'left' as const,
-          dataType: 'any',
-        },
-        {
-          id: 'output',
-          type: 'output' as const,
-          position: 'right' as const,
-          dataType: 'processed',
-        },
-      ],
+  },
+  complex: {
+    nodes: [
+      {
+        id: 'start-1',
+        type: 'start',
+        position: { x: 50, y: 100 },
+        data: { label: '开始', description: '工作流入口' },
+        ports: [
+          {
+            id: 'output',
+            type: 'output' as const,
+            position: 'right' as const,
+            dataType: 'any',
+          },
+        ],
+      },
+      {
+        id: 'process-1',
+        type: 'process',
+        position: { x: 250, y: 50 },
+        data: { label: '处理A', description: '数据处理分支A' },
+        ports: [
+          {
+            id: 'input',
+            type: 'input' as const,
+            position: 'left' as const,
+            dataType: 'any',
+          },
+          {
+            id: 'output',
+            type: 'output' as const,
+            position: 'right' as const,
+            dataType: 'processed',
+          },
+        ],
+      },
+      {
+        id: 'process-2',
+        type: 'process',
+        position: { x: 250, y: 150 },
+        data: { label: '处理B', description: '数据处理分支B' },
+        ports: [
+          {
+            id: 'input',
+            type: 'input' as const,
+            position: 'left' as const,
+            dataType: 'any',
+          },
+          {
+            id: 'output',
+            type: 'output' as const,
+            position: 'right' as const,
+            dataType: 'processed',
+          },
+        ],
+      },
+      {
+        id: 'process-3',
+        type: 'process',
+        position: { x: 450, y: 100 },
+        data: { label: '合并', description: '数据合并节点' },
+        ports: [
+          {
+            id: 'input',
+            type: 'input' as const,
+            position: 'left' as const,
+            dataType: 'processed',
+          },
+          {
+            id: 'output',
+            type: 'output' as const,
+            position: 'right' as const,
+            dataType: 'processed',
+          },
+        ],
+      },
+      {
+        id: 'end-1',
+        type: 'end',
+        position: { x: 650, y: 100 },
+        data: { label: '结束', description: '工作流出口' },
+        ports: [
+          {
+            id: 'input',
+            type: 'input' as const,
+            position: 'left' as const,
+            dataType: 'processed',
+          },
+        ],
+      },
+    ],
+    edges: [
+      {
+        id: 'edge-1',
+        source: 'start-1',
+        sourcePort: 'output',
+        target: 'process-1',
+        targetPort: 'input',
+      },
+      {
+        id: 'edge-2',
+        source: 'start-1',
+        sourcePort: 'output',
+        target: 'process-2',
+        targetPort: 'input',
+      },
+      {
+        id: 'edge-3',
+        source: 'process-1',
+        sourcePort: 'output',
+        target: 'process-3',
+        targetPort: 'input',
+      },
+      {
+        id: 'edge-4',
+        source: 'process-3',
+        sourcePort: 'output',
+        target: 'end-1',
+        targetPort: 'input',
+      },
+    ],
+    viewport: { x: 0, y: 0, zoom: 1 },
+    metadata: {
+      version: '1.0.0',
+      created: new Date().toISOString(),
+      modified: new Date().toISOString(),
     },
-    {
-      id: 'end-1',
-      type: 'end',
-      position: { x: 500, y: 150 },
-      data: { label: '结束', description: '工作流结束节点' },
-      ports: [
-        {
-          id: 'input',
-          type: 'input' as const,
-          position: 'left' as const,
-          dataType: 'processed',
-        },
-      ],
-    },
-  ],
-  edges: [
-    {
-      id: 'edge-1',
-      source: 'start-1',
-      sourcePort: 'output',
-      target: 'process-1',
-      targetPort: 'input',
-    },
-    {
-      id: 'edge-2',
-      source: 'process-1',
-      sourcePort: 'output',
-      target: 'end-1',
-      targetPort: 'input',
-    },
-  ],
+  },
 }
+
+// Default test scenario
+const TEST_SCENARIO = TEST_SCENARIOS.basic
 
 // Utility functions
 const generateNodeId = (type: string): string => {
@@ -555,6 +766,75 @@ const clearCanvas = async () => {
   }
 }
 
+// Validate JSON data structure
+const validateFlowData = (data: any): { valid: boolean; error?: string } => {
+  if (!data || typeof data !== 'object') {
+    return { valid: false, error: '数据必须是一个对象' }
+  }
+
+  if (!Array.isArray(data.nodes)) {
+    return { valid: false, error: '数据必须包含 nodes 数组' }
+  }
+
+  if (!Array.isArray(data.edges)) {
+    return { valid: false, error: '数据必须包含 edges 数组' }
+  }
+
+  // Validate nodes
+  for (let i = 0; i < data.nodes.length; i++) {
+    const node = data.nodes[i]
+    if (!node.id || typeof node.id !== 'string') {
+      return { valid: false, error: `节点 ${i} 缺少有效的 id` }
+    }
+    if (!node.type || typeof node.type !== 'string') {
+      return { valid: false, error: `节点 ${node.id} 缺少有效的 type` }
+    }
+    if (
+      !node.position ||
+      typeof node.position.x !== 'number' ||
+      typeof node.position.y !== 'number'
+    ) {
+      return { valid: false, error: `节点 ${node.id} 缺少有效的 position` }
+    }
+  }
+
+  // Validate edges
+  const nodeIds = new Set(data.nodes.map((n: any) => n.id))
+  for (let i = 0; i < data.edges.length; i++) {
+    const edge = data.edges[i]
+    if (!edge.id || typeof edge.id !== 'string') {
+      return { valid: false, error: `连接 ${i} 缺少有效的 id` }
+    }
+    if (!edge.source || !nodeIds.has(edge.source)) {
+      return {
+        valid: false,
+        error: `连接 ${edge.id} 的源节点 ${edge.source} 不存在`,
+      }
+    }
+    if (!edge.target || !nodeIds.has(edge.target)) {
+      return {
+        valid: false,
+        error: `连接 ${edge.id} 的目标节点 ${edge.target} 不存在`,
+      }
+    }
+  }
+
+  // Validate viewport if present
+  if (data.viewport) {
+    if (typeof data.viewport.x !== 'number' || !isFinite(data.viewport.x)) {
+      return { valid: false, error: 'viewport.x 必须是有效数字' }
+    }
+    if (typeof data.viewport.y !== 'number' || !isFinite(data.viewport.y)) {
+      return { valid: false, error: 'viewport.y 必须是有效数字' }
+    }
+    if (typeof data.viewport.zoom !== 'number' || data.viewport.zoom <= 0) {
+      return { valid: false, error: 'viewport.zoom 必须是正数' }
+    }
+  }
+
+  return { valid: true }
+}
+
 // Export JSON
 const exportJSON = async () => {
   if (!props.editor || props.disabled) return
@@ -562,63 +842,202 @@ const exportJSON = async () => {
   try {
     setLoading(true, '正在导出数据...')
 
+    // Get current workflow state
     const jsonData = props.editor.toJSON()
 
+    // Validate the exported data
+    let parsedData: FlowData
+    try {
+      parsedData = JSON.parse(jsonData)
+    } catch (parseError) {
+      throw new Error('导出的数据格式无效')
+    }
+
+    const validation = validateFlowData(parsedData)
+    if (!validation.valid) {
+      throw new Error(`导出数据验证失败: ${validation.error}`)
+    }
+
+    // Store the exported data
+    lastExportedData.value = jsonData
+    lastImportedData.value = null
+
     emit('export-json', jsonData)
-    showFeedback('success', 'JSON数据导出成功')
 
     // Also log to console for debugging
-    console.log('导出的JSON数据:', jsonData)
+    console.log('导出的JSON数据:', parsedData)
 
     // Copy to clipboard if available
     if (navigator.clipboard) {
-      await navigator.clipboard.writeText(jsonData)
-      showFeedback('success', 'JSON数据已导出并复制到剪贴板')
+      try {
+        await navigator.clipboard.writeText(jsonData)
+        showFeedback(
+          'success',
+          `JSON数据已导出并复制到剪贴板 (${parsedData.nodes.length} 个节点, ${parsedData.edges.length} 条连接)`
+        )
+      } catch (clipboardError) {
+        showFeedback(
+          'success',
+          `JSON数据导出成功 (${parsedData.nodes.length} 个节点, ${parsedData.edges.length} 条连接)`
+        )
+      }
+    } else {
+      showFeedback(
+        'success',
+        `JSON数据导出成功 (${parsedData.nodes.length} 个节点, ${parsedData.edges.length} 条连接)`
+      )
     }
   } catch (error) {
     console.error('导出JSON失败:', error)
-    showFeedback(
-      'error',
-      `导出失败: ${error instanceof Error ? error.message : '未知错误'}`
+    const errorMessage = error instanceof Error ? error.message : '未知错误'
+    showFeedback('error', `导出失败: ${errorMessage}`)
+    emit(
+      'serialization-error',
+      error instanceof Error ? error : new Error(errorMessage)
     )
   } finally {
     setLoading(false)
   }
 }
 
-// Import JSON
+// Import predefined JSON
 const importJSON = async () => {
   if (!props.editor || props.disabled) return
 
   try {
-    setLoading(true, '正在导入数据...')
+    setLoading(true, '正在导入预定义数据...')
 
     // Use predefined test scenario
-    const jsonData = JSON.stringify({
-      nodes: TEST_SCENARIO.nodes,
-      edges: TEST_SCENARIO.edges,
-      viewport: { x: 0, y: 0, zoom: 1 },
-      metadata: {
+    const scenarioData = TEST_SCENARIO
+
+    // Validate the data before import
+    const validation = validateFlowData(scenarioData)
+    if (!validation.valid) {
+      throw new Error(`预定义数据验证失败: ${validation.error}`)
+    }
+
+    const jsonData = JSON.stringify(scenarioData)
+
+    // Import the data
+    props.editor.fromJSON(jsonData)
+
+    // Store the imported data
+    lastImportedData.value = scenarioData
+    lastExportedData.value = null
+
+    emit('import-json', scenarioData)
+    showFeedback(
+      'success',
+      `数据导入成功 (${scenarioData.nodes.length} 个节点, ${scenarioData.edges.length} 条连接)`
+    )
+
+    console.log('JSON数据已导入:', scenarioData)
+  } catch (error) {
+    console.error('导入JSON失败:', error)
+    const errorMessage = error instanceof Error ? error.message : '未知错误'
+    showFeedback('error', `导入失败: ${errorMessage}`)
+    emit(
+      'serialization-error',
+      error instanceof Error ? error : new Error(errorMessage)
+    )
+  } finally {
+    setLoading(false)
+  }
+}
+
+// Show custom import dialog
+const showImportDialog = () => {
+  showCustomImportDialog.value = true
+  customJsonInput.value = ''
+  jsonValidationError.value = ''
+}
+
+// Close custom import dialog
+const closeImportDialog = () => {
+  showCustomImportDialog.value = false
+  customJsonInput.value = ''
+  jsonValidationError.value = ''
+}
+
+// Validate custom JSON input in real-time
+watch(customJsonInput, newValue => {
+  if (!newValue.trim()) {
+    jsonValidationError.value = ''
+    return
+  }
+
+  try {
+    const parsed = JSON.parse(newValue)
+    const validation = validateFlowData(parsed)
+    if (!validation.valid) {
+      jsonValidationError.value = validation.error || '数据格式无效'
+    } else {
+      jsonValidationError.value = ''
+    }
+  } catch (e) {
+    jsonValidationError.value = 'JSON格式无效'
+  }
+})
+
+// Import custom JSON
+const importCustomJSON = async () => {
+  if (!props.editor || props.disabled || !customJsonInput.value) return
+
+  try {
+    setLoading(true, '正在导入自定义数据...')
+
+    // Parse and validate the custom JSON
+    let parsedData: FlowData
+    try {
+      parsedData = JSON.parse(customJsonInput.value)
+    } catch (parseError) {
+      throw new Error('JSON格式无效')
+    }
+
+    const validation = validateFlowData(parsedData)
+    if (!validation.valid) {
+      throw new Error(validation.error || '数据格式无效')
+    }
+
+    // Ensure viewport has default values if not provided
+    if (!parsedData.viewport) {
+      parsedData.viewport = { x: 0, y: 0, zoom: 1 }
+    }
+
+    // Ensure metadata has default values if not provided
+    if (!parsedData.metadata) {
+      parsedData.metadata = {
         version: '1.0.0',
         created: new Date().toISOString(),
         modified: new Date().toISOString(),
-      },
-    })
+      }
+    }
 
-    props.editor.fromJSON(jsonData)
+    // Import the data
+    props.editor.fromJSON(JSON.stringify(parsedData))
 
-    emit('import-json')
+    // Store the imported data
+    lastImportedData.value = parsedData
+    lastExportedData.value = null
+
+    // Close dialog
+    closeImportDialog()
+
+    emit('import-json', parsedData)
     showFeedback(
       'success',
-      `数据导入成功 (${TEST_SCENARIO.nodes.length} 个节点, ${TEST_SCENARIO.edges.length} 条连接)`
+      `自定义数据导入成功 (${parsedData.nodes.length} 个节点, ${parsedData.edges.length} 条连接)`
     )
 
-    console.log('JSON数据已导入')
+    console.log('自定义JSON数据已导入:', parsedData)
   } catch (error) {
-    console.error('导入JSON失败:', error)
-    showFeedback(
-      'error',
-      `导入失败: ${error instanceof Error ? error.message : '未知错误'}`
+    console.error('导入自定义JSON失败:', error)
+    const errorMessage = error instanceof Error ? error.message : '未知错误'
+    jsonValidationError.value = errorMessage
+    showFeedback('error', `导入失败: ${errorMessage}`)
+    emit(
+      'serialization-error',
+      error instanceof Error ? error : new Error(errorMessage)
     )
   } finally {
     setLoading(false)
@@ -842,6 +1261,104 @@ watch(
   color: var(--text-color-secondary);
 }
 
+/* 导入对话框样式 */
+.import-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.import-dialog {
+  background-color: var(--bg-color);
+  border-radius: var(--border-radius);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  width: 90%;
+  max-width: 600px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.import-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color-light);
+}
+
+.import-dialog-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-color-primary);
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: var(--text-color-secondary);
+  padding: 0;
+  line-height: 1;
+  transition: color 0.2s ease;
+}
+
+.close-btn:hover {
+  color: var(--danger-color);
+}
+
+.import-dialog-body {
+  padding: 20px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.json-input {
+  width: 100%;
+  padding: 12px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  background-color: #f5f5f5;
+  border: 1px solid var(--border-color-light);
+  border-radius: var(--border-radius);
+  resize: vertical;
+  line-height: 1.5;
+  min-height: 200px;
+}
+
+.json-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
+}
+
+.validation-error {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background-color: var(--danger-bg);
+  border: 1px solid var(--danger-color);
+  border-radius: var(--border-radius);
+  color: var(--danger-color);
+  font-size: 13px;
+}
+
+.import-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--border-color-light);
+}
+
 /* 响应式设计 */
 @media (max-width: 768px) {
   .control-panel {
@@ -875,6 +1392,28 @@ watch(
 
   .loading-indicator span {
     font-size: 13px;
+  }
+
+  .import-dialog {
+    width: 95%;
+    max-height: 90vh;
+  }
+
+  .import-dialog-header {
+    padding: 12px 16px;
+  }
+
+  .import-dialog-body {
+    padding: 16px;
+  }
+
+  .import-dialog-footer {
+    padding: 12px 16px;
+  }
+
+  .json-input {
+    font-size: 12px;
+    min-height: 150px;
   }
 }
 </style>

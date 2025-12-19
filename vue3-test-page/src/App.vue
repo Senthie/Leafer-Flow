@@ -55,6 +55,7 @@
           @clear-canvas="onClearCanvas"
           @export-json="onExportJSON"
           @import-json="onImportJSON"
+          @serialization-error="onSerializationError"
         />
 
         <div class="panel">
@@ -184,9 +185,41 @@
           </div>
         </div>
 
+        <!-- 序列化状态显示 -->
+        <div v-if="serializationStatus !== 'idle'" class="panel">
+          <div class="panel-header">
+            序列化状态
+            <span
+              class="status-badge"
+              :class="{
+                'status-success':
+                  serializationStatus === 'exported' ||
+                  serializationStatus === 'imported',
+                'status-error': serializationStatus === 'error',
+              }"
+            >
+              {{
+                serializationStatus === 'exported'
+                  ? '已导出'
+                  : serializationStatus === 'imported'
+                  ? '已导入'
+                  : '错误'
+              }}
+            </span>
+          </div>
+          <div class="panel-body">
+            <p class="serialization-message">{{ serializationMessage }}</p>
+          </div>
+        </div>
+
         <!-- JSON 数据显示区域 -->
         <div v-if="exportedJSON" class="panel">
-          <div class="panel-header">导出的JSON数据</div>
+          <div class="panel-header">
+            导出的JSON数据
+            <button class="copy-btn" @click="copyJSON" title="复制到剪贴板">
+              📋
+            </button>
+          </div>
           <div class="panel-body">
             <textarea
               v-model="exportedJSON"
@@ -194,6 +227,12 @@
               class="json-display"
               rows="10"
             ></textarea>
+            <div class="json-stats">
+              <span v-if="jsonStats">
+                {{ jsonStats.nodeCount }} 个节点 |
+                {{ jsonStats.edgeCount }} 条连接
+              </span>
+            </div>
           </div>
         </div>
       </aside>
@@ -216,6 +255,12 @@ const editorBackground = ref('#ffffff')
 const showGrid = ref(true)
 const exportedJSON = ref('')
 
+// 序列化状态
+const serializationStatus = ref<'idle' | 'exported' | 'imported' | 'error'>(
+  'idle'
+)
+const serializationMessage = ref('')
+
 // 交互状态
 const selectedNodeCount = ref(0)
 const selectedEdgeCount = ref(0)
@@ -232,6 +277,31 @@ const editorStatus = computed(() => {
   if (!editorInstance.value) return '未初始化'
   return '已就绪'
 })
+
+// JSON统计信息
+const jsonStats = computed(() => {
+  if (!exportedJSON.value) return null
+  try {
+    const data = JSON.parse(exportedJSON.value)
+    return {
+      nodeCount: data.nodes?.length || 0,
+      edgeCount: data.edges?.length || 0,
+    }
+  } catch {
+    return null
+  }
+})
+
+// 复制JSON到剪贴板
+const copyJSON = async () => {
+  if (!exportedJSON.value) return
+  try {
+    await navigator.clipboard.writeText(exportedJSON.value)
+    serializationMessage.value = 'JSON已复制到剪贴板'
+  } catch (error) {
+    console.error('复制失败:', error)
+  }
+}
 
 // 编辑器事件处理
 const onEditorReady = (editor: any) => {
@@ -291,12 +361,28 @@ const onClearCanvas = () => {
 const onExportJSON = (jsonData: string) => {
   console.log('JSON导出事件:', jsonData)
   exportedJSON.value = jsonData
+  serializationStatus.value = 'exported'
+  serializationMessage.value = '数据导出成功'
 }
 
-const onImportJSON = () => {
-  console.log('JSON导入事件')
+const onImportJSON = (data?: any) => {
+  console.log('JSON导入事件:', data)
   updateCounts()
   exportedJSON.value = '' // 清空之前的导出数据显示
+  serializationStatus.value = 'imported'
+  if (data) {
+    serializationMessage.value = `导入成功: ${
+      data.nodes?.length || 0
+    } 个节点, ${data.edges?.length || 0} 条连接`
+  } else {
+    serializationMessage.value = '数据导入成功'
+  }
+}
+
+const onSerializationError = (error: Error) => {
+  console.error('序列化错误:', error)
+  serializationStatus.value = 'error'
+  serializationMessage.value = `错误: ${error.message}`
 }
 
 // 交互事件处理
@@ -597,6 +683,55 @@ console.log('Vue3测试页面已加载')
   border-radius: var(--border-radius);
   resize: vertical;
   line-height: 1.5;
+}
+
+.json-stats {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-color-secondary);
+}
+
+.status-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-left: 8px;
+}
+
+.status-success {
+  background-color: var(--success-bg, #e8f5e9);
+  color: var(--success-color, #67c23a);
+}
+
+.status-error {
+  background-color: var(--danger-bg, #fef0f0);
+  color: var(--danger-color, #f56c6c);
+}
+
+.serialization-message {
+  font-size: 13px;
+  color: var(--text-color-secondary);
+  margin: 0;
+}
+
+.copy-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.copy-btn:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 /* 交互反馈样式 */

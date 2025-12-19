@@ -89,7 +89,7 @@ describe('ControlPanel', () => {
     mockEditor.getAllNodes.mockReturnValue([
       { id: 'node1', getAllPorts: () => [{ id: 'output', type: 'output' }] },
       { id: 'node2', getAllPorts: () => [{ id: 'input', type: 'input' }] },
-    ])
+    ] as any)
 
     const wrapper = mount(ControlPanel, {
       props: {

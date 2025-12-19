@@ -1,0 +1,208 @@
+:root {
+  --primary-color: #409eff;
+  --success-color: #67c23a;
+  --warning-color: #e6a23c;
+  --danger-color: #f56c6c;
+  --info-color: #909399;
+  
+  --bg-color: #ffffff;
+  --bg-color-page: #f5f5f5;
+  --bg-color-overlay: rgba(255, 255, 255, 0.9);
+  
+  --text-color-primary: #303133;
+  --text-color-regular: #606266;
+  --text-color-secondary: #909399;
+  --text-color-placeholder: #c0c4cc;
+  
+  --border-color: #dcdfe6;
+  --border-color-light: #e4e7ed;
+  --border-color-lighter: #ebeef5;
+  --border-color-extra-light: #f2f6fc;
+  
+  --box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12), 0 0 6px rgba(0, 0, 0, 0.04);
+  --box-shadow-light: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  
+  --border-radius: 4px;
+  --border-radius-small: 2px;
+  --border-radius-base: 4px;
+  --border-radius-round: 20px;
+  --border-radius-circle: 100%;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--bg-color-page);
+  color: var(--text-color-primary);
+  line-height: 1.6;
+}
+
+#app {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* 通用按钮样式 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  background-color: var(--bg-color);
+  color: var(--text-color-primary);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.btn:hover {
+  background-color: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn:disabled:hover {
+  background-color: var(--bg-color);
+  color: var(--text-color-primary);
+  border-color: var(--border-color);
+  transform: none;
+}
+
+.btn-primary {
+  background-color: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+}
+
+.btn-primary:hover {
+  background-color: #337ecc;
+  border-color: #337ecc;
+}
+
+.btn-success {
+  background-color: var(--success-color);
+  color: white;
+  border-color: var(--success-color);
+}
+
+.btn-success:hover {
+  background-color: #529b2e;
+  border-color: #529b2e;
+}
+
+.btn-danger {
+  background-color: var(--danger-color);
+  color: white;
+  border-color: var(--danger-color);
+}
+
+.btn-danger:hover {
+  background-color: #c45656;
+  border-color: #c45656;
+}
+
+/* 通用面板样式 */
+.panel {
+  background-color: var(--bg-color);
+  border: 1px solid var(--border-color-light);
+  border-radius: var(--border-radius);
+  box-shadow: var(--box-shadow);
+}
+
+.panel-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color-lighter);
+  font-weight: 600;
+  color: var(--text-color-primary);
+}
+
+.panel-body {
+  padding: 16px;
+}
+
+/* 通用表单样式 */
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 14px;
+  color: var(--text-color-regular);
+}
+
+.form-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  font-size: 14px;
+  transition: border-color 0.3s;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+/* 通用消息样式 */
+.message {
+  padding: 12px 16px;
+  border-radius: var(--border-radius);
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+
+.message-success {
+  background-color: #f0f9ff;
+  color: var(--success-color);
+  border: 1px solid #b3d8ff;
+}
+
+.message-error {
+  background-color: #fef0f0;
+  color: var(--danger-color);
+  border: 1px solid #fbc4c4;
+}
+
+.message-info {
+  background-color: #f4f4f5;
+  color: var(--info-color);
+  border: 1px solid #d3d4d6;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .btn {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+  
+  .panel-body {
+    padding: 12px;
+  }
+}

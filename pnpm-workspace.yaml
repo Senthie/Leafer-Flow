@@ -1,5 +1,6 @@
 # pnpm workspace configuration
 packages:
-  - "."
-  - "packages/*"
-  - "examples/*"
+  - '.'
+  - 'packages/*'
+  - 'examples/*'
+  - 'vue3-test-page'
